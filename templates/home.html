@@ -217,7 +217,7 @@
               <td>
                 <div class="d-flex gap-2">
                   <button type="button"
-                    class="btn btn-sm fw-semibold text-white btn-descargar-excel"
+                    class="btn btn-sm fw-semibold text-white btn-descargar-pdf"
                     data-sol="{{ sol.pk }}"
                     data-url="{% url 'descargar_solicitud' sol.pk %}"
                     style="background:#dc2626;border:none;border-radius:7px;padding:5px 12px;font-size:.8rem;">
@@ -510,8 +510,8 @@
         if (pct > 0) {
           td.innerHTML = `<a href="${td.dataset.url}"
             class="btn btn-sm fw-semibold text-white"
-            style="background:#1d6f42;border:none;border-radius:7px;padding:5px 12px;font-size:.8rem;">
-            <i class="bi bi-file-earmark-excel-fill me-1"></i>Excel
+            style="background:#dc2626;border:none;border-radius:7px;padding:5px 12px;font-size:.8rem;">
+            <i class="bi bi-file-earmark-pdf-fill me-1"></i>PDF
           </a>`;
         }
       });
@@ -529,8 +529,8 @@
       actualizarTicket(); // sincronizar al cargar la pagina
     });
 
-    // Descargar Excel con versiones seleccionadas (POST)
-      document.querySelectorAll('.btn-descargar-excel').forEach(btn => {
+    // Descargar PDF con versiones seleccionadas (POST)
+      document.querySelectorAll('.btn-descargar-pdf').forEach(btn => {
         btn.addEventListener('click', function(){
           const solPk = this.dataset.sol;
           const url   = this.dataset.url;

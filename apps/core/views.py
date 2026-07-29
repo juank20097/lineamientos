@@ -3,6 +3,7 @@ import math
 import os
 import subprocess
 import re
+import tempfile
 import textwrap
 from decimal import Decimal
 from io import BytesIO
@@ -66,7 +67,8 @@ PDF_APROBADO_NOMBRE = os.getenv('PDF_APROBADO_NOMBRE', 'Andres Garcia Romero')
 PDF_APROBADO_CARGO  = os.getenv('PDF_APROBADO_CARGO',  'Subdirector Nacional de Arquitectura y Soluciones')
 
 
-def _generar_pdf_lineamientos(lin, version_map):
+def _generar_pdf_lineamientos(lin, version_map, watermark=False, tipos_incluir=None):
+    """tipos_incluir: iterable de tipos ('software','bdd','infraestructura') a incluir; None = todos."""
     from reportlab.lib.pagesizes import A4, landscape
     from reportlab.lib import colors
     from reportlab.lib.units import cm, mm
@@ -110,6 +112,8 @@ def _generar_pdf_lineamientos(lin, version_map):
     TIPO_ORDEN = [('software', 'Software'), ('bdd', 'Base de Datos'), ('infraestructura', 'Capacidad')]
 
     for tipo_key, tipo_nombre in TIPO_ORDEN:
+        if tipos_incluir is not None and tipo_key not in tipos_incluir:
+            continue
         det = lin.detalles.filter(tipo=tipo_key).first()
         if not det:
             continue
@@ -195,6 +199,8 @@ def _generar_pdf_lineamientos(lin, version_map):
     elaborados = []  # Para las firmas
 
     for tipo_key, tipo_label in [('software','SW'),('bdd','BDD'),('infraestructura','INF')]:
+        if tipos_incluir is not None and tipo_key not in tipos_incluir:
+            continue
         detalle = lin.detalles.filter(tipo=tipo_key).first()
         if not detalle:
             continue
@@ -322,7 +328,7 @@ def _generar_pdf_lineamientos(lin, version_map):
     story.append(fila_firmas('Aprobado\npor:', [{'nombre': PDF_APROBADO_NOMBRE, 'cargo': PDF_APROBADO_CARGO}]))
 
     # ── PAGINAS BDD (diagrama, tablas, SQL) ──
-    bdd_detalle = lin.detalles.filter(tipo='bdd').first()
+    bdd_detalle = lin.detalles.filter(tipo='bdd').first() if (tipos_incluir is None or 'bdd' in tipos_incluir) else None
     if bdd_detalle:
         gen_pk   = version_map.get(bdd_detalle.pk)
         bdd_gen  = (
@@ -466,6 +472,14 @@ def _generar_pdf_lineamientos(lin, version_map):
         canvas.drawRightString(PAGE_W - MARGIN, 0.5*cm, f'Pág. {doc.page}')
         canvas.drawString(MARGIN, 0.5*cm, f'PAS-MLT-{num_doc} | {hoy} | IESS - DNTI - SDNAS')
         canvas.restoreState()
+        if watermark:
+            canvas.saveState()
+            canvas.translate(PAGE_W / 2, PAGE_H / 2)
+            canvas.rotate(45)
+            canvas.setFillColorRGB(0.5, 0.5, 0.5, alpha=0.3)
+            canvas.setFont('Helvetica-Bold', 90)
+            canvas.drawCentredString(0, 0, 'TEMPORAL')
+            canvas.restoreState()
 
     doc.build(story, onFirstPage=on_page, onLaterPages=on_page)
     buf.seek(0)
@@ -849,10 +863,32 @@ def finalizar_ajax(request, detalle_id):
             necesidad=fila.get('necesidad', ''), lineamiento=fila.get('lineamiento', ''),
             mecanismo=fila.get('mecanismo', ''),  observacion=fila.get('observacion', ''),
         )
-    if modo == 'nuevo':
-        _run_script(ZNUNY_SCRIPT_CERRAR, [detalle.ticket_interno, MENSAJE_FINALIZACION])
-    elif modo == 'nueva_version':
-        _run_script(ZNUNY_SCRIPT_CERRAR, [ticket, MENSAJE_FINALIZACION])
+    if modo in ('nuevo', 'nueva_version'):
+        ticket_cierre = detalle.ticket_interno if modo == 'nuevo' else ticket
+        version_map_pdf = {detalle.pk: generado.pk}
+        buf = _generar_pdf_lineamientos(
+            detalle.lineamiento, version_map_pdf,
+            watermark=True, tipos_incluir=[detalle.tipo],
+        )
+        tmp_path = None
+        try:
+            with tempfile.NamedTemporaryFile(
+                suffix='.pdf', prefix=f'temporal_{detalle.pk}_',
+                delete=False,
+            ) as tmp:
+                tmp.write(buf.read())
+                tmp_path = tmp.name
+            resultado = _run_script(
+                ZNUNY_SCRIPT_CERRAR, [ticket_cierre, MENSAJE_FINALIZACION, tmp_path],
+            )
+            if not resultado.get('cerrado'):
+                return JsonResponse({
+                    'ok': False,
+                    'error': resultado.get('error', 'No se pudo adjuntar el PDF y cerrar el ticket'),
+                })
+        finally:
+            if tmp_path and os.path.exists(tmp_path):
+                os.remove(tmp_path)
     elif modo == 'actualizar':
         ticket_version = generado.ticket or detalle.ticket_interno
         _run_script(ZNUNY_SCRIPT_NOTA, [ticket_version])
@@ -888,7 +924,11 @@ def descargar_pdf_solicitud(request, lineamiento_id):
                     try:
                         detalle_pk = int(key.split('_')[1]); version_map[detalle_pk] = int(val)
                     except (ValueError, IndexError): pass
-        buf  = _generar_pdf_lineamientos(lin, version_map)
+        detalles    = list(lin.detalles.all())
+        total       = len(detalles)
+        finalizados = sum(1 for d in detalles if d.finalizado)
+        progreso    = round(finalizados / total * 100) if total else 0
+        buf  = _generar_pdf_lineamientos(lin, version_map, watermark=(progreso < 100))
         resp = HttpResponse(buf.read(), content_type='application/pdf')
         resp['Content-Disposition'] = f'attachment; filename="PAS-MLT-{lin.ticket_principal}_lineamientos.pdf"'
         return resp

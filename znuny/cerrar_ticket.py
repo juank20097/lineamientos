@@ -3,7 +3,7 @@ cerrar_ticket.py
 Cierra un ticket en Znuny via AgentTicketClose.
 
 Uso:
-    python cerrar_ticket.py <numero_ticket> [mensaje_override]
+    python cerrar_ticket.py <numero_ticket> [mensaje_override] [ruta_adjunto]
 
 Retorna JSON:
     {"cerrado": true,  "numero": "2026072271003084"}
@@ -29,7 +29,7 @@ def salida(data: dict):
     sys.exit(0)
 
 
-def cerrar_ticket(numero_ticket: str, mensaje_override: str = None):
+def cerrar_ticket(numero_ticket: str, mensaje_override: str = None, adjunto_pdf: str = None):
     asunto  = ASUNTO_CIERRE
     mensaje = mensaje_override if mensaje_override else MENSAJE_CIERRE
 
@@ -88,6 +88,23 @@ def cerrar_ticket(numero_ticket: str, mensaje_override: str = None):
                 except Exception:
                     pass
 
+            # ADJUNTO PDF (si se especifico)
+            if adjunto_pdf:
+                ruta_adjunto = Path(adjunto_pdf)
+                if not ruta_adjunto.exists():
+                    salida({'cerrado': False, 'error': f'Adjunto no encontrado: {adjunto_pdf}'})
+                try:
+                    file_input = page.locator("input[type='file']").first
+                    if file_input.count() == 0:
+                        salida({'cerrado': False, 'error': 'No se encontro el campo de adjuntos'})
+                    file_input.set_input_files(str(ruta_adjunto))
+                    page.wait_for_timeout(1500)
+                    # Verificar que el adjunto quedo listado antes de continuar
+                    if ruta_adjunto.name not in page.locator('body').inner_text():
+                        salida({'cerrado': False, 'error': 'El adjunto no se registro en el ticket'})
+                except Exception as e:
+                    salida({'cerrado': False, 'error': f'Fallo al subir adjunto: {e}'})
+
             # SUBMIT
             btn_submit = page.locator(
                 "button[type='submit']:has-text('Cerrar'), "
@@ -109,6 +126,7 @@ def cerrar_ticket(numero_ticket: str, mensaje_override: str = None):
 
 if __name__ == '__main__':
     if len(sys.argv) < 2:
-        salida({'cerrado': False, 'error': 'Uso: python cerrar_ticket.py <numero_ticket> [mensaje]'})
+        salida({'cerrado': False, 'error': 'Uso: python cerrar_ticket.py <numero_ticket> [mensaje] [adjunto_pdf]'})
     mensaje_arg = sys.argv[2] if len(sys.argv) >= 3 else None
-    cerrar_ticket(sys.argv[1].strip(), mensaje_arg)
+    adjunto_arg = sys.argv[3] if len(sys.argv) >= 4 else None
+    cerrar_ticket(sys.argv[1].strip(), mensaje_arg, adjunto_arg)

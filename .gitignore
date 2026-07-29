@@ -1,3 +1,11 @@
 .env
 znuny/.env
 .claudeignore
+.clinerules
+*.log
+__pycache__/
+*.pyc
+venv/
+media/
+staticfiles/
+*.pdf
