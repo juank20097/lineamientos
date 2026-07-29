@@ -1,0 +1,724 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Lineamientos IESS</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
+  <style>
+    :root { --iess-verde:#006847; --iess-verde-hover:#00512f; --sidebar-width:260px; --topbar-h:56px; }
+    *{box-sizing:border-box;margin:0;padding:0;}
+    body{font-family:'Segoe UI',sans-serif;background:#f0f2f5;min-height:100vh;}
+    .topbar{position:fixed;top:0;left:0;right:0;height:var(--topbar-h);background:var(--iess-verde);display:flex;align-items:center;padding:0 20px;z-index:1000;box-shadow:0 2px 8px rgba(0,0,0,.18);}
+    .topbar-brand{color:#fff;font-size:1.05rem;font-weight:700;letter-spacing:.5px;display:flex;align-items:center;gap:10px;text-decoration:none;}
+    .topbar-right{margin-left:auto;display:flex;align-items:center;gap:16px;}
+    .user-badge{background:rgba(255,255,255,.15);color:#fff;border-radius:20px;padding:4px 14px;font-size:.82rem;display:flex;align-items:center;gap:6px;}
+    .rol-chip{background:rgba(255,255,255,.2);border-radius:10px;padding:2px 8px;font-size:.74rem;text-transform:uppercase;letter-spacing:.5px;}
+    .btn-logout{background:rgba(255,255,255,.15);border:1px solid rgba(255,255,255,.3);color:#fff;border-radius:8px;padding:5px 14px;font-size:.84rem;cursor:pointer;text-decoration:none;display:flex;align-items:center;gap:6px;transition:background .2s;}
+    .btn-logout:hover{background:rgba(255,255,255,.25);color:#fff;}
+    .sidebar{position:fixed;top:var(--topbar-h);left:0;bottom:0;width:var(--sidebar-width);background:#fff;border-right:1px solid #e5e9ee;display:flex;flex-direction:column;z-index:900;box-shadow:2px 0 8px rgba(0,0,0,.04);}
+    .sidebar-section{padding:20px 12px 8px;}
+    .sidebar-section-label{font-size:.7rem;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:#b0b8c1;padding:0 8px;margin-bottom:6px;}
+    .sidebar-btn{display:flex;align-items:center;gap:10px;width:100%;padding:11px 14px;border:none;border-radius:8px;background:var(--iess-verde);color:#fff;font-size:.92rem;font-weight:600;cursor:pointer;text-decoration:none;transition:background .18s,transform .1s;margin-bottom:4px;}
+    .sidebar-btn:hover{background:var(--iess-verde-hover);color:#fff;transform:translateX(2px);}
+    .sidebar-nav-item{display:flex;align-items:center;gap:10px;padding:9px 14px;border-radius:8px;color:#4a5568;text-decoration:none;font-size:.9rem;transition:background .15s,color .15s;margin-bottom:2px;}
+    .sidebar-nav-item:hover{background:#f0f7f4;color:var(--iess-verde);}
+    .sidebar-nav-item.active{background:#e6f2ed;color:var(--iess-verde);font-weight:600;}
+    .sidebar-footer{margin-top:auto;padding:16px 12px;border-top:1px solid #eef1f4;font-size:.75rem;color:#b0b8c1;text-align:center;}
+    .main-content{margin-left:var(--sidebar-width);margin-top:var(--topbar-h);padding:32px 36px;min-height:calc(100vh - var(--topbar-h));}
+    .welcome-card{background:#fff;border-radius:12px;padding:32px 36px;box-shadow:0 2px 12px rgba(0,0,0,.06);border-left:4px solid var(--iess-verde);}
+    .welcome-card h4{color:var(--iess-verde);font-weight:700;margin-bottom:6px;}
+    .welcome-card p{color:#64748b;font-size:.92rem;margin:0;}
+    #loading-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:9999;flex-direction:column;align-items:center;justify-content:center;gap:16px;}
+    #loading-overlay .spinner-border{width:3rem;height:3rem;color:#fff;}
+    #loading-overlay p{color:#fff;font-size:1rem;font-weight:500;margin:0;}
+  </style>
+</head>
+<body>
+
+  <div id="loading-overlay">
+    <div class="spinner-border" role="status"></div>
+    <p>Verificando ticket en Znuny, por favor espere...</p>
+  </div>
+
+  <nav class="topbar">
+    <a href="{% url 'home' %}" class="topbar-brand">
+      <i class="bi bi-shield-check-fill" style="font-size:1.3rem"></i> LINEAMIENTOS &mdash; SDNAS
+    </a>
+    <div class="topbar-right">
+      <div class="user-badge">
+        <i class="bi bi-person-circle"></i>
+        {{ request.user.get_full_name|default:request.user.username }}
+        <span class="rol-chip">{{ request.user.get_rol_display }}</span>
+      </div>
+      <a href="{% url 'logout' %}" class="btn-logout"><i class="bi bi-box-arrow-right"></i> Salir</a>
+    </div>
+  </nav>
+
+  <aside class="sidebar">
+    {% if request.user.is_staff %}
+    <div class="sidebar-section">
+      <div class="sidebar-section-label">Acciones</div>
+      <button type="button" class="sidebar-btn" id="btnCrearLineamiento">
+        <i class="bi bi-plus-circle-fill"></i> Crear Lineamiento
+      </button>
+    </div>
+    {% endif %}
+    <div class="sidebar-section">
+      <div class="sidebar-section-label">Menu</div>
+      <a href="{% url 'home' %}" class="sidebar-nav-item active"><i class="bi bi-house-door"></i> Inicio</a>
+    </div>
+    <div class="sidebar-footer">IESS &mdash; DNTI &copy; {% now "Y" %}</div>
+  </aside>
+
+  <main class="main-content">
+    {% if messages %}
+      {% for msg in messages %}
+        <div class="alert alert-{{ msg.tags }} alert-dismissible fade show mb-3" role="alert">
+          {{ msg }}<button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        </div>
+      {% endfor %}
+    {% endif %}
+
+    <div class="welcome-card">
+      <h4><i class="bi bi-person-check me-2"></i>Bienvenido, {{ request.user.get_full_name|default:request.user.username }}</h4>
+      <p>Accediste como <strong>{{ request.user.get_rol_display }}</strong>. Usa el menu lateral para navegar.</p>
+    </div>
+
+    <div class="mt-4">
+
+      {% if request.user.is_staff %}
+
+      {# ── SOLICITUDES ASIGNADAS (progreso < 100%) ── #}
+      <h6 class="fw-bold mb-3" style="color:#374151;">
+        <i class="bi bi-list-task me-2" style="color:var(--iess-verde);"></i>
+        Solicitudes Asignadas
+        {% if solicitudes_asignadas %}<span class="badge ms-1" style="background:var(--iess-verde);font-size:.75rem;">{{ solicitudes_asignadas|length }}</span>{% endif %}
+      </h6>
+
+      {% if solicitudes_asignadas %}
+      <div class="table-responsive mb-5" style="border-radius:10px;overflow:hidden;box-shadow:0 2px 12px rgba(0,0,0,.06);">
+        <table class="table table-hover mb-0" style="background:#fff;font-size:.88rem;">
+          <thead style="background:var(--iess-verde);color:#fff;">
+            <tr>
+              <th class="py-3 ps-4">Ticket Principal</th>
+              <th>Tipo(s)</th><th>Ticket(s) Hijo</th><th>Responsable(s)</th>
+              <th>Fecha Asignado</th><th style="min-width:140px;">Progreso</th><th>Descargar</th><th>Editar</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for sol in solicitudes_asignadas %}
+            <tr>
+              <td class="ps-4 py-3"><span class="fw-semibold" style="font-family:monospace;">#{{ sol.ticket_principal }}</span></td>
+              <td>{% for d in sol.detalles.all %}
+                <div class="d-flex align-items-center gap-1 mb-1">
+                  {% if d.finalizado %}
+                    <i class="bi bi-check-circle-fill" style="color:#16a34a;font-size:.8rem;"></i>
+                  {% else %}
+                    <i class="bi bi-circle" style="color:#d1d5db;font-size:.8rem;"></i>
+                  {% endif %}
+                  <span class="badge" style="font-size:.72rem;{% if d.tipo == 'software' %}background:#eff6ff;color:#2563eb;{% elif d.tipo == 'bdd' %}background:#f5f3ff;color:#7c3aed;{% else %}background:#fffbeb;color:#d97706;{% endif %}">{{ d.get_tipo_display }}</span>
+                </div>
+              {% endfor %}</td>
+              <td>{% for d in sol.detalles.all %}
+                <span class="d-block" style="font-family:monospace;font-size:.8rem;">#{{ d.ticket_interno }}</span>
+              {% endfor %}</td>
+              <td>{% for d in sol.detalles.all %}
+                <span class="d-block">{{ d.usuario_asignado.get_full_name|default:d.usuario_asignado.username }}</span>
+              {% endfor %}</td>
+              <td style="color:#6b7280;">{{ sol.fecha_creacion|date:"d/m/Y" }}</td>
+              <td class="td-progreso" data-sol="{{ sol.pk }}" style="min-width:140px;">
+                <div style="display:flex;align-items:center;gap:8px;">
+                  <div style="flex:1;background:#e5e7eb;border-radius:20px;height:8px;overflow:hidden;">
+                    <div class="barra-progreso" style="height:100%;border-radius:20px;transition:width .5s;width:0%;background:#006847;"></div>
+                  </div>
+                  <span class="pct-label" style="font-size:.72rem;font-weight:700;color:#475569;white-space:nowrap;">0%</span>
+                </div>
+              </td>
+              <td class="td-descarga" data-sol="{{ sol.pk }}" data-url="{% url 'descargar_solicitud' sol.pk %}">
+                {# El boton aparece via JS cuando progreso > 0% #}
+              </td>
+              <td>
+                <a href="{% url 'editar_solicitud' sol.pk %}" class="btn btn-sm fw-semibold"
+                  style="background:#fff;border:1.5px solid var(--iess-verde);color:var(--iess-verde);border-radius:7px;padding:4px 12px;font-size:.78rem;">
+                  <i class="bi bi-pencil-square me-1"></i>Editar
+                </a>
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      {% else %}
+      <div style="background:#fff;border-radius:10px;padding:24px;text-align:center;box-shadow:0 2px 12px rgba(0,0,0,.06);color:#9ca3af;margin-bottom:32px;">
+        <i class="bi bi-inbox" style="font-size:2rem;"></i>
+        <p class="mt-2 mb-0" style="font-size:.9rem;">No tienes solicitudes pendientes.</p>
+      </div>
+      {% endif %}
+
+      {# ── SOLICITUDES ATENDIDAS (progreso = 100%) ── #}
+      {% if solicitudes_atendidas %}
+      <h6 class="fw-bold mb-3" style="color:#374151;">
+        <i class="bi bi-check2-all me-2" style="color:#16a34a;"></i>
+        Solicitudes Atendidas
+        <span class="badge ms-1" style="background:#16a34a;font-size:.75rem;">{{ solicitudes_atendidas|length }}</span>
+      </h6>
+      <div class="table-responsive" style="border-radius:10px;overflow:hidden;box-shadow:0 2px 12px rgba(0,0,0,.06);">
+        <table class="table table-hover mb-0" style="background:#fff;font-size:.88rem;">
+          <thead style="background:#16a34a;color:#fff;">
+            <tr>
+              <th class="py-3 ps-4">Ticket Principal</th>
+              <th>Tipo(s)</th><th>Ticket(s) Hijo</th><th>Responsable(s)</th>
+              <th>Fecha Asignado</th><th>Fecha Atendido</th><th style="min-width:130px;">Progreso</th><th>Acciones</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for sol in solicitudes_atendidas %}
+            <tr>
+              <td class="ps-4 py-3"><span class="fw-semibold" style="font-family:monospace;">#{{ sol.ticket_principal }}</span></td>
+              <td>{% for d in sol.detalles.all %}
+                <div class="d-flex align-items-center gap-2 mb-2">
+                  <i class="bi bi-check-circle-fill" style="color:#16a34a;font-size:.8rem;flex-shrink:0;"></i>
+                  <span class="badge" style="font-size:.72rem;{% if d.tipo == 'software' %}background:#eff6ff;color:#2563eb;{% elif d.tipo == 'bdd' %}background:#f5f3ff;color:#7c3aed;{% else %}background:#fffbeb;color:#d97706;{% endif %}">{{ d.get_tipo_display }}</span>
+                  {% if d.finalizado %}
+                  <select class="form-select form-select-sm version-select"
+                    name="version_{{ d.pk }}"
+                    data-sol="{{ sol.pk }}"
+                    data-detalle="{{ d.pk }}"
+                    style="font-size:.75rem;padding:2px 6px;width:auto;min-width:70px;">
+                    {% for gen in d.generados.all %}
+                    <option value="{{ gen.pk }}" data-ticket="{{ gen.ticket|default:d.ticket_interno }}">v{{ gen.version_display }}</option>
+                    {% endfor %}
+                  </select>
+                  {% endif %}
+                </div>
+              {% endfor %}</td>
+              <td>{% for d in sol.detalles.all %}
+                <span class="d-block ticket-hijo-display" data-detalle="{{ d.pk }}" style="font-family:monospace;font-size:.8rem;">#{{ d.ticket_interno }}</span>
+              {% endfor %}</td>
+              <td>{% for d in sol.detalles.all %}
+                <span class="d-block">{{ d.usuario_asignado.get_full_name|default:d.usuario_asignado.username }}</span>
+              {% endfor %}</td>
+              <td style="color:#6b7280;">{{ sol.fecha_creacion|date:"d/m/Y" }}</td>
+              <td style="color:#16a34a;font-weight:600;">
+                {% for d in sol.detalles.all %}{% if d.ultima_version %}
+                  <span class="d-block">{{ d.ultima_version.fecha_creacion|date:"d/m/Y" }}</span>
+                {% endif %}{% endfor %}
+              </td>
+              <td class="td-progreso" data-sol="{{ sol.pk }}" style="min-width:130px;">
+                <div style="display:flex;align-items:center;gap:8px;">
+                  <div style="flex:1;background:#e5e7eb;border-radius:20px;height:8px;overflow:hidden;">
+                    <div class="barra-progreso" style="height:100%;border-radius:20px;transition:width .5s;width:0%;background:#16a34a;"></div>
+                  </div>
+                  <span class="pct-label" style="font-size:.72rem;font-weight:700;color:#16a34a;white-space:nowrap;">0%</span>
+                </div>
+              </td>
+              <td>
+                <div class="d-flex gap-2">
+                  <button type="button"
+                    class="btn btn-sm fw-semibold text-white btn-descargar-excel"
+                    data-sol="{{ sol.pk }}"
+                    data-url="{% url 'descargar_solicitud' sol.pk %}"
+                    style="background:#dc2626;border:none;border-radius:7px;padding:5px 12px;font-size:.8rem;">
+                    <i class="bi bi-file-earmark-pdf-fill me-1"></i>PDF
+                  </button>
+                  <a href="{% url 'editar_solicitud' sol.pk %}" class="btn btn-sm fw-semibold"
+                    style="background:#fff;border:1.5px solid #16a34a;color:#16a34a;border-radius:7px;padding:4px 12px;font-size:.78rem;">
+                    <i class="bi bi-pencil-square me-1"></i>Editar
+                  </a>
+                </div>
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      {% endif %}
+
+      {% else %}
+      {# ── VISTA USUARIO: pendientes + atendidas ── #}
+
+      <h6 class="fw-bold mb-3" style="color:#374151;">
+        <i class="bi bi-list-task me-2" style="color:var(--iess-verde);"></i>
+        Mis Solicitudes
+        {% if detalles_pendientes %}<span class="badge ms-1" style="background:var(--iess-verde);font-size:.75rem;">{{ detalles_pendientes|length }}</span>{% endif %}
+      </h6>
+
+      {% if detalles_pendientes %}
+      <div class="table-responsive" style="border-radius:10px;overflow:hidden;box-shadow:0 2px 12px rgba(0,0,0,.06);">
+        <table class="table table-hover mb-0" style="background:#fff;font-size:.88rem;">
+          <thead style="background:var(--iess-verde);color:#fff;">
+            <tr><th class="py-3 ps-4">Ticket Principal</th><th>Tipo</th><th>Ticket Hijo</th><th>Fecha</th><th>Accion</th></tr>
+          </thead>
+          <tbody>
+            {% for d in detalles_pendientes %}
+            <tr>
+              <td class="ps-4 py-3"><span class="fw-semibold" style="font-family:monospace;">#{{ d.lineamiento.ticket_principal }}</span></td>
+              <td><span class="badge" style="font-size:.72rem;{% if d.tipo == 'software' %}background:#eff6ff;color:#2563eb;{% elif d.tipo == 'bdd' %}background:#f5f3ff;color:#7c3aed;{% else %}background:#fffbeb;color:#d97706;{% endif %}">{{ d.get_tipo_display }}</span></td>
+              <td style="font-family:monospace;font-size:.82rem;">#{{ d.ticket_interno }}</td>
+              <td style="color:#6b7280;">{{ d.lineamiento.fecha_creacion|date:"d/m/Y H:i" }}</td>
+              <td>
+                <a href="{% url 'generar_lineamiento' d.pk %}" class="btn btn-sm fw-semibold text-white" style="background:var(--iess-verde);border:none;border-radius:7px;padding:5px 14px;font-size:.82rem;">
+                  <i class="bi bi-file-earmark-text me-1"></i>Generar
+                </a>
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      {% else %}
+      <div style="background:#fff;border-radius:10px;padding:28px;text-align:center;box-shadow:0 2px 12px rgba(0,0,0,.06);color:#9ca3af;">
+        <i class="bi bi-inbox" style="font-size:2rem;"></i>
+        <p class="mt-2 mb-0" style="font-size:.9rem;">No tienes solicitudes pendientes.</p>
+      </div>
+      {% endif %}
+
+      {% if detalles_atendidos %}
+      <h6 class="fw-bold mb-3 mt-5" style="color:#374151;">
+        <i class="bi bi-check2-all me-2" style="color:#16a34a;"></i>
+        Solicitudes Atendidas
+        <span class="badge ms-1" style="background:#16a34a;font-size:.75rem;">{{ detalles_atendidos|length }}</span>
+      </h6>
+      <div class="table-responsive" style="border-radius:10px;overflow:hidden;box-shadow:0 2px 12px rgba(0,0,0,.06);">
+        <table class="table table-hover mb-0" style="background:#fff;font-size:.88rem;">
+          <thead style="background:#16a34a;color:#fff;">
+            <tr><th class="py-3 ps-4">Ticket Principal</th><th>Tipo</th><th>Ticket Hijo</th><th>Fecha</th><th>Accion</th></tr>
+          </thead>
+          <tbody>
+            {% for d in detalles_atendidos %}
+            <tr style="opacity:.88;">
+              <td class="ps-4 py-3"><span class="fw-semibold" style="font-family:monospace;">#{{ d.lineamiento.ticket_principal }}</span></td>
+              <td><span class="badge" style="font-size:.72rem;{% if d.tipo == 'software' %}background:#eff6ff;color:#2563eb;{% elif d.tipo == 'bdd' %}background:#f5f3ff;color:#7c3aed;{% else %}background:#fffbeb;color:#d97706;{% endif %}">{{ d.get_tipo_display }}</span></td>
+              <td style="font-family:monospace;font-size:.82rem;">#{{ d.ticket_interno }}</td>
+              <td style="color:#6b7280;">{{ d.lineamiento.fecha_creacion|date:"d/m/Y H:i" }}</td>
+              <td>
+                <div class="d-flex align-items-center gap-2">
+                  <span class="badge" style="background:#dcfce7;color:#166534;font-size:.72rem;padding:4px 10px;"><i class="bi bi-check-circle-fill me-1"></i>Finalizado</span>
+                  <button type="button"
+                    class="btn btn-sm fw-semibold btn-actualizar-usuario"
+                    data-detalle="{{ d.pk }}"
+                    data-version="{% if d.ultima_version %}{{ d.ultima_version.version_display }}{% else %}1.0{% endif %}"
+                    style="background:#fff;border:1.5px solid #16a34a;color:#16a34a;border-radius:7px;padding:4px 12px;font-size:.78rem;">
+                    <i class="bi bi-arrow-repeat me-1"></i>Actualizar
+                  </button>
+                </div>
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      {% endif %}
+
+      {% endif %}
+
+    </div>
+  </main>
+
+  <!-- MODAL ACTUALIZAR USUARIO (no-staff) -->
+  {% if not request.user.is_staff %}
+  <div class="modal fade" id="modalActualizarUsuario" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+      <div class="modal-content" style="border-radius:12px;overflow:hidden;">
+        <div class="modal-header" style="background:#16a34a;color:#fff;border:none;">
+          <h5 class="modal-title"><i class="bi bi-arrow-repeat me-2"></i>Actualizar Lineamiento</h5>
+          <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body p-4">
+
+          <!-- Paso 1: elegir modo -->
+          <div id="uPaso1">
+            <p style="font-size:.9rem;color:#475569;">Versión actual: <strong id="versionActualUsuario"></strong>. ¿Qué deseas hacer?</p>
+            <div class="d-flex flex-column gap-3 mt-3">
+              <button id="btnUsuarioActualizar" class="btn text-white fw-semibold text-start" style="background:#16a34a;border-radius:8px;padding:12px 16px;">
+                <i class="bi bi-pencil-square me-2"></i>Actualizar versión actual
+                <small class="d-block fw-normal opacity-75 mt-1" style="font-size:.78rem;">Edición manual — el asistente estará bloqueado.</small>
+              </button>
+              <button id="btnUsuarioNuevaVersion" class="btn fw-semibold text-start" style="background:#f0fdf4;color:#16a34a;border:1.5px solid #16a34a;border-radius:8px;padding:12px 16px;">
+                <i class="bi bi-plus-circle me-2"></i>Crear nueva versión
+                <small class="d-block fw-normal opacity-75 mt-1" style="font-size:.78rem;" id="labelNVUsuario"></small>
+              </button>
+            </div>
+          </div>
+
+          <!-- Paso 2: ticket nueva version -->
+          <div id="uPaso2" style="display:none;">
+            <button id="btnUsuarioVolverPaso1" style="background:none;border:none;color:#16a34a;font-size:.82rem;cursor:pointer;padding:0;margin-bottom:12px;">
+              <i class="bi bi-arrow-left me-1"></i>Volver
+            </button>
+            <p style="font-size:.9rem;color:#475569;">Ingresa el ticket de Znuny para esta nueva versión:</p>
+            <input type="text" id="inputTicketNV" class="form-control mt-2"
+              placeholder="Ej: Ticket#2026... o solo el numero" autocomplete="off" style="font-family:monospace;">
+            <div id="msgTicketNV2" style="font-size:.85rem;min-height:20px;margin-top:6px;"></div>
+            <button id="btnValidarTicketNV" class="btn fw-semibold text-white w-100 mt-3"
+              style="background:#16a34a;border-radius:8px;padding:10px;">
+              <i class="bi bi-search me-1"></i>Verificar y Continuar
+            </button>
+          </div>
+
+        </div>
+      </div>
+    </div>
+  </div>
+  {% endif %}
+
+  <!-- MODAL TICKET PRINCIPAL -->
+  {% if request.user.is_staff %}
+  <div class="modal fade" id="modalTicketPrincipal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+      <div class="modal-content" style="border-radius:12px;overflow:hidden;">
+        <div class="modal-header" style="background:var(--iess-verde);color:#fff;border:none;">
+          <h5 class="modal-title"><i class="bi bi-ticket-detailed me-2"></i>Crear Lineamiento</h5>
+          <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body p-4">
+          <p class="text-muted mb-3" style="font-size:.88rem;">Ingrese el numero del ticket principal que agrupa este lineamiento.</p>
+          <label class="form-label fw-semibold" for="inputTicketPrincipal">Numero de Ticket</label>
+          <input type="text" id="inputTicketPrincipal" class="form-control"
+            placeholder="Ej: Ticket#2026... o solo el numero" autocomplete="off">
+          <div id="msgTicketPrincipal" style="font-size:.87rem;min-height:22px;margin-top:8px;"></div>
+        </div>
+        <div class="modal-footer border-0 pt-0 px-4 pb-4">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+          <button type="button" id="btnVerificarTicket" class="btn fw-semibold text-white px-4"
+            style="background:var(--iess-verde);">
+            <i class="bi bi-search me-1"></i> Verificar y Continuar
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+  {% endif %}
+
+  <!-- MODAL ACTUALIZAR LINEAMIENTO -->
+  <div class="modal fade" id="modalActualizarHome" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+      <div class="modal-content" style="border-radius:12px;overflow:hidden;">
+        <div class="modal-header" style="background:var(--iess-verde);color:#fff;border:none;">
+          <h5 class="modal-title"><i class="bi bi-arrow-repeat me-2"></i>Actualizar Lineamiento</h5>
+          <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body p-4">
+
+          <!-- Paso 1: elegir modo -->
+          <div id="paso1Modal">
+            <p style="font-size:.9rem;color:#475569;">Versión actual: <strong id="versionActualModal"></strong>. ¿Qué deseas hacer?</p>
+            <div class="d-flex flex-column gap-3 mt-3">
+              <button id="btnElegirActualizar" class="btn text-white fw-semibold" style="background:var(--iess-verde);border-radius:8px;padding:10px;">
+                <i class="bi bi-pencil-square me-2"></i>Actualizar versión actual
+                <small class="d-block fw-normal opacity-75" style="font-size:.75rem;">Sobrescribe el registro existente</small>
+              </button>
+              <button id="btnElegirNuevaVersion" class="btn fw-semibold" style="background:#f0fdf4;color:var(--iess-verde);border:1.5px solid var(--iess-verde);border-radius:8px;padding:10px;">
+                <i class="bi bi-plus-circle me-2"></i>Generar nueva versión
+                <small class="d-block fw-normal opacity-75" style="font-size:.75rem;" id="labelSiguienteVersion"></small>
+              </button>
+            </div>
+          </div>
+
+          <!-- Paso 2: ticket nueva version -->
+          <div id="paso2Modal" style="display:none;">
+            <button id="btnVolverPaso1" style="background:none;border:none;color:var(--iess-verde);font-size:.82rem;cursor:pointer;padding:0;margin-bottom:12px;">
+              <i class="bi bi-arrow-left me-1"></i>Volver
+            </button>
+            <p style="font-size:.9rem;color:#475569;">Ingresa el ticket de Znuny asociado a esta nueva versión:</p>
+            <input type="text" id="inputTicketNuevaVersion" class="form-control mt-2"
+              placeholder="Ej: Ticket#2026... o solo el numero" autocomplete="off"
+              style="font-family:monospace;">
+            <div id="msgTicketNV" style="font-size:.85rem;min-height:20px;margin-top:6px;"></div>
+            <button id="btnValidarNV" class="btn text-white fw-semibold w-100 mt-3"
+              style="background:var(--iess-verde);border-radius:8px;padding:10px;">
+              <i class="bi bi-search me-1"></i>Verificar y Continuar
+            </button>
+          </div>
+
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+  <script>
+    const CSRF = '{{ csrf_token }}';
+    function mostrarLoading(){ document.getElementById('loading-overlay').style.display='flex'; }
+    function ocultarLoading(){ document.getElementById('loading-overlay').style.display='none'; }
+
+    document.getElementById('btnCrearLineamiento')?.addEventListener('click', () => {
+      document.getElementById('inputTicketPrincipal').value = '';
+      document.getElementById('msgTicketPrincipal').innerHTML = '';
+      document.getElementById('btnVerificarTicket').disabled = false;
+      document.getElementById('btnVerificarTicket').innerHTML = '<i class="bi bi-search me-1"></i> Verificar y Continuar';
+      new bootstrap.Modal(document.getElementById('modalTicketPrincipal')).show();
+    });
+
+    // Verificar ticket principal
+    function verificarTicketPrincipal(){
+      const input  = document.getElementById('inputTicketPrincipal');
+      const msg    = document.getElementById('msgTicketPrincipal');
+      const btn    = document.getElementById('btnVerificarTicket');
+      const numero = input.value.replace(/^ticket#/i,'').trim();
+      if (!numero){ msg.innerHTML='<span class="text-danger">Ingrese un numero de ticket.</span>'; return; }
+      btn.disabled = true;
+      btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span> Verificando...';
+      mostrarLoading();
+      fetch('{% url "validar_ticket" %}',{
+        method:'POST',
+        headers:{'Content-Type':'application/x-www-form-urlencoded','X-CSRFToken':CSRF},
+        body:`numero=${encodeURIComponent(numero)}`,
+      })
+      .then(r=>r.json())
+      .then(data=>{
+        ocultarLoading();
+        btn.disabled=false;
+        btn.innerHTML='<i class="bi bi-search me-1"></i> Verificar y Continuar';
+        if(data.existe){
+          bootstrap.Modal.getInstance(document.getElementById('modalTicketPrincipal')).hide();
+          window.location.href=`{% url 'crear_lineamiento' %}?ticket=${encodeURIComponent(data.numero)}`;
+        } else {
+          msg.innerHTML='<span class="text-danger fw-semibold"><i class="bi bi-x-circle me-1"></i>El ticket no existe en Znuny.</span>';
+        }
+      })
+      .catch(()=>{
+        ocultarLoading();
+        btn.disabled=false;
+        btn.innerHTML='<i class="bi bi-search me-1"></i> Verificar y Continuar';
+        msg.innerHTML='<span class="text-danger">Error de conexion.</span>';
+      });
+    }
+    document.getElementById('btnVerificarTicket')?.addEventListener('click', verificarTicketPrincipal);
+    document.getElementById('inputTicketPrincipal')?.addEventListener('keydown', e=>{ if(e.key==='Enter') verificarTicketPrincipal(); });
+
+    {% if request.user.is_staff %}
+    // ── BARRAS DE PROGRESO + BOTON DESCARGAR ──
+    (function(){
+      const PROGRESO = JSON.parse('{{ progreso_json|escapejs }}' || '{}');
+      document.querySelectorAll('.td-progreso').forEach(td => {
+        const solPk = parseInt(td.dataset.sol);
+        const pct   = PROGRESO[solPk] ?? 0;
+        const barra = td.querySelector('.barra-progreso');
+        const label = td.querySelector('.pct-label');
+        barra.style.background = pct===100 ? '#16a34a' : pct===0 ? '#d1d5db' : '#006847';
+        barra.style.width  = pct + '%';
+        label.textContent  = pct + '%';
+        label.style.color  = pct===100 ? '#16a34a' : '#475569';
+      });
+      // Inyectar boton Descargar en solicitudes asignadas cuando pct > 0
+      document.querySelectorAll('.td-descarga').forEach(td => {
+        const solPk = parseInt(td.dataset.sol);
+        const pct   = PROGRESO[solPk] ?? 0;
+        if (pct > 0) {
+          td.innerHTML = `<a href="${td.dataset.url}"
+            class="btn btn-sm fw-semibold text-white"
+            style="background:#1d6f42;border:none;border-radius:7px;padding:5px 12px;font-size:.8rem;">
+            <i class="bi bi-file-earmark-excel-fill me-1"></i>Excel
+          </a>`;
+        }
+      });
+    // Actualizar ticket hijo al cambiar version
+    document.querySelectorAll('.version-select').forEach(sel => {
+      function actualizarTicket(){
+        const detallePk = sel.dataset.detalle;
+        const opcion    = sel.options[sel.selectedIndex];
+        const ticket    = opcion ? (opcion.dataset.ticket || '') : '';
+        const row  = sel.closest('tr');
+        const span = row ? row.querySelector(`.ticket-hijo-display[data-detalle="${detallePk}"]`) : null;
+        if (span && ticket) span.textContent = `#${ticket}`;
+      }
+      sel.addEventListener('change', actualizarTicket);
+      actualizarTicket(); // sincronizar al cargar la pagina
+    });
+
+    // Descargar Excel con versiones seleccionadas (POST)
+      document.querySelectorAll('.btn-descargar-excel').forEach(btn => {
+        btn.addEventListener('click', function(){
+          const solPk = this.dataset.sol;
+          const url   = this.dataset.url;
+          const form  = document.createElement('form');
+          form.method = 'POST'; form.action = url;
+          const csrf = document.createElement('input');
+          csrf.type='hidden'; csrf.name='csrfmiddlewaretoken'; csrf.value=CSRF;
+          form.appendChild(csrf);
+          document.querySelectorAll(`.version-select[data-sol="${solPk}"]`).forEach(sel => {
+            const inp = document.createElement('input');
+            inp.type='hidden'; inp.name=sel.name; inp.value=sel.value;
+            form.appendChild(inp);
+          });
+          document.body.appendChild(form); form.submit(); document.body.removeChild(form);
+        });
+      });
+
+      })();
+    {% endif %}
+
+    // ── MODAL ACTUALIZAR HOME ──
+    ;(function(){
+      const modalEl = document.getElementById('modalActualizarHome');
+      if (!modalEl) return;
+
+      let detalleActivo = null;
+
+      function resetPasos(){
+        document.getElementById('paso1Modal').style.display = 'block';
+        document.getElementById('paso2Modal').style.display = 'none';
+        document.getElementById('inputTicketNuevaVersion').value = '';
+        document.getElementById('msgTicketNV').innerHTML = '';
+        const btnNV = document.getElementById('btnValidarNV');
+        btnNV.disabled = false;
+        btnNV.innerHTML = '<i class="bi bi-search me-1"></i>Verificar y Continuar';
+      }
+
+      // Bootstrap dispara show.bs.modal antes de mostrar el modal
+      // e.relatedTarget es el boton que lo activo
+      modalEl.addEventListener('show.bs.modal', function(e) {
+        const btn = e.relatedTarget;
+        if (!btn) return;
+        detalleActivo = btn.dataset.detalle;
+        const ver  = btn.dataset.version || '1.0';
+        const sigV = parseInt(ver) + 1;
+        document.getElementById('versionActualModal').textContent = `v${ver}`;
+        document.getElementById('labelSiguienteVersion').textContent = `Se creará v${sigV}.0 preservando la anterior`;
+        resetPasos();
+      });
+
+      document.getElementById('btnElegirActualizar').addEventListener('click', () => {
+        bootstrap.Modal.getInstance(modalEl).hide();
+        window.location.href = `/lineamiento/generar/${detalleActivo}/?modo=actualizar`;
+      });
+
+      document.getElementById('btnElegirNuevaVersion').addEventListener('click', () => {
+        document.getElementById('paso1Modal').style.display = 'none';
+        document.getElementById('paso2Modal').style.display = 'block';
+        document.getElementById('inputTicketNuevaVersion').focus();
+      });
+
+      document.getElementById('btnVolverPaso1').addEventListener('click', () => {
+        document.getElementById('paso1Modal').style.display = 'block';
+        document.getElementById('paso2Modal').style.display = 'none';
+      });
+
+      function validarTicketNV(){
+        const numero = document.getElementById('inputTicketNuevaVersion').value.replace(/^ticket#/i,'').trim();
+        const msg    = document.getElementById('msgTicketNV');
+        const btnNV  = document.getElementById('btnValidarNV');
+        if (!numero){ msg.innerHTML = '<span class="text-danger">Ingrese un numero de ticket.</span>'; return; }
+        btnNV.disabled = true;
+        btnNV.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span> Verificando...';
+        mostrarLoading();
+        fetch('{% url "validar_ticket" %}', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'X-CSRFToken': CSRF },
+          body: `numero=${encodeURIComponent(numero)}`,
+        })
+        .then(r => r.json())
+        .then(data => {
+          ocultarLoading();
+          btnNV.disabled = false;
+          btnNV.innerHTML = '<i class="bi bi-search me-1"></i>Verificar y Continuar';
+          if (data.existe){
+            bootstrap.Modal.getInstance(modalEl).hide();
+            window.location.href = `/lineamiento/generar/${detalleActivo}/?modo=nueva_version&ticket=${encodeURIComponent(data.numero)}`;
+          } else {
+            msg.innerHTML = '<span class="text-danger fw-semibold"><i class="bi bi-x-circle me-1"></i>Ticket no encontrado en Znuny.</span>';
+          }
+        })
+        .catch(() => {
+          ocultarLoading();
+          btnNV.disabled = false;
+          btnNV.innerHTML = '<i class="bi bi-search me-1"></i>Verificar y Continuar';
+          msg.innerHTML = '<span class="text-danger">Error de conexion.</span>';
+        });
+      }
+
+      document.getElementById('btnValidarNV').addEventListener('click', validarTicketNV);
+      document.getElementById('inputTicketNuevaVersion').addEventListener('keydown', e => { if(e.key==='Enter') validarTicketNV(); });
+
+    })();
+    // ── MODAL ACTUALIZAR USUARIO (no-staff) ──
+    ;(function(){
+      const modalEl = document.getElementById('modalActualizarUsuario');
+      if (!modalEl) return;
+      let detalleActivo = null;
+
+      function resetPasosUsuario(){
+        document.getElementById('uPaso1').style.display = 'block';
+        document.getElementById('uPaso2').style.display = 'none';
+        document.getElementById('inputTicketNV').value = '';
+        document.getElementById('msgTicketNV2').innerHTML = '';
+        const btn = document.getElementById('btnValidarTicketNV');
+        btn.disabled = false;
+        btn.innerHTML = '<i class="bi bi-search me-1"></i>Verificar y Continuar';
+      }
+
+      document.querySelectorAll('.btn-actualizar-usuario').forEach(btn => {
+        btn.addEventListener('click', function(){
+          detalleActivo = this.dataset.detalle;
+          const ver  = this.dataset.version || '1.0';
+          const sigV = parseInt(ver) + 1;
+          document.getElementById('versionActualUsuario').textContent = `v${ver}`;
+          document.getElementById('labelNVUsuario').textContent = `Se creará v${sigV}.0 — ingresa el ticket asociado`;
+          resetPasosUsuario();
+          new bootstrap.Modal(modalEl).show();
+        });
+      });
+
+      // Paso 1 → Actualizar
+      document.getElementById('btnUsuarioActualizar').addEventListener('click', () => {
+        bootstrap.Modal.getInstance(modalEl).hide();
+        window.location.href = `/lineamiento/generar/${detalleActivo}/?modo=actualizar`;
+      });
+
+      // Paso 1 → Nueva versión
+      document.getElementById('btnUsuarioNuevaVersion').addEventListener('click', () => {
+        document.getElementById('uPaso1').style.display = 'none';
+        document.getElementById('uPaso2').style.display = 'block';
+        document.getElementById('inputTicketNV').focus();
+      });
+
+      // Volver
+      document.getElementById('btnUsuarioVolverPaso1').addEventListener('click', () => {
+        document.getElementById('uPaso1').style.display = 'block';
+        document.getElementById('uPaso2').style.display = 'none';
+      });
+
+      // Validar ticket nueva versión
+      function validarNV(){
+        const numero = document.getElementById('inputTicketNV').value.replace(/^ticket#/i,'').trim();
+        const msg    = document.getElementById('msgTicketNV2');
+        const btn    = document.getElementById('btnValidarTicketNV');
+        if (!numero){ msg.innerHTML='<span class="text-danger">Ingrese un numero de ticket.</span>'; return; }
+        btn.disabled = true;
+        btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span> Verificando...';
+        mostrarLoading();
+        fetch('{% url "validar_ticket" %}',{
+          method:'POST',
+          headers:{'Content-Type':'application/x-www-form-urlencoded','X-CSRFToken':CSRF},
+          body:`numero=${encodeURIComponent(numero)}`,
+        })
+        .then(r=>r.json())
+        .then(data=>{
+          ocultarLoading();
+          btn.disabled = false;
+          btn.innerHTML = '<i class="bi bi-search me-1"></i>Verificar y Continuar';
+          if (data.existe){
+            bootstrap.Modal.getInstance(modalEl).hide();
+            window.location.href = `/lineamiento/generar/${detalleActivo}/?modo=nueva_version&ticket=${encodeURIComponent(data.numero)}`;
+          } else {
+            msg.innerHTML = '<span class="text-danger fw-semibold"><i class="bi bi-x-circle me-1"></i>Ticket no encontrado en Znuny.</span>';
+          }
+        })
+        .catch(()=>{
+          ocultarLoading();
+          btn.disabled = false;
+          btn.innerHTML = '<i class="bi bi-search me-1"></i>Verificar y Continuar';
+          msg.innerHTML = '<span class="text-danger">Error de conexion.</span>';
+        });
+      }
+      document.getElementById('btnValidarTicketNV').addEventListener('click', validarNV);
+      document.getElementById('inputTicketNV').addEventListener('keydown', e=>{ if(e.key==='Enter') validarNV(); });
+
+    })();
+
+  </script>
+</body>
+</html>

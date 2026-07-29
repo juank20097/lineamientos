@@ -1,0 +1,346 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Crear Lineamiento - IESS</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
+  <style>
+    :root { --iess-verde: #006847; --iess-verde-hover: #00512f; --sidebar-width: 260px; --topbar-h: 56px; }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: 'Segoe UI', sans-serif; background: #f0f2f5; min-height: 100vh; }
+
+    .topbar {
+      position: fixed; top: 0; left: 0; right: 0; height: var(--topbar-h);
+      background: var(--iess-verde); display: flex; align-items: center;
+      padding: 0 20px; z-index: 1000; box-shadow: 0 2px 8px rgba(0,0,0,0.18);
+    }
+    .topbar-brand { color: #fff; font-size: 1.05rem; font-weight: 700; display: flex; align-items: center; gap: 10px; text-decoration: none; }
+    .topbar-right { margin-left: auto; display: flex; align-items: center; gap: 16px; }
+    .user-badge { background: rgba(255,255,255,0.15); color: #fff; border-radius: 20px; padding: 4px 14px; font-size: 0.82rem; display: flex; align-items: center; gap: 6px; }
+    .btn-logout { background: rgba(255,255,255,0.15); border: 1px solid rgba(255,255,255,0.3); color: #fff; border-radius: 8px; padding: 5px 14px; font-size: 0.84rem; text-decoration: none; display: flex; align-items: center; gap: 6px; }
+    .btn-logout:hover { background: rgba(255,255,255,0.25); color: #fff; }
+
+    .sidebar {
+      position: fixed; top: var(--topbar-h); left: 0; bottom: 0;
+      width: var(--sidebar-width); background: #fff;
+      border-right: 1px solid #e5e9ee; display: flex; flex-direction: column;
+      z-index: 900; box-shadow: 2px 0 8px rgba(0,0,0,0.04);
+    }
+    .sidebar-section { padding: 20px 12px 8px; }
+    .sidebar-section-label { font-size: 0.7rem; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; color: #b0b8c1; padding: 0 8px; margin-bottom: 6px; }
+    .sidebar-nav-item { display: flex; align-items: center; gap: 10px; padding: 9px 14px; border-radius: 8px; color: #4a5568; text-decoration: none; font-size: 0.9rem; transition: background 0.15s; margin-bottom: 2px; }
+    .sidebar-nav-item:hover { background: #f0f7f4; color: var(--iess-verde); }
+    .sidebar-footer { margin-top: auto; padding: 16px 12px; border-top: 1px solid #eef1f4; font-size: 0.75rem; color: #b0b8c1; text-align: center; }
+
+    .main-content { margin-left: var(--sidebar-width); margin-top: var(--topbar-h); padding: 32px 36px; min-height: calc(100vh - var(--topbar-h)); }
+
+    .card-lin { background: #fff; border-radius: 12px; box-shadow: 0 2px 12px rgba(0,0,0,0.06); overflow: hidden; }
+    .card-lin-header { background: var(--iess-verde); color: #fff; padding: 18px 24px; display: flex; align-items: center; gap: 10px; }
+    .card-lin-header h5 { margin: 0; font-weight: 700; font-size: 1rem; }
+    .ticket-badge { background: rgba(255,255,255,0.2); border-radius: 8px; padding: 4px 12px; font-size: 0.88rem; font-family: monospace; font-weight: 600; }
+
+    .tipo-card { border: 1.5px solid #e2e8f0; border-radius: 10px; padding: 16px 20px; margin-bottom: 12px; transition: border-color 0.2s; }
+    .tipo-card.activo  { border-color: var(--iess-verde); background: #f7fbf9; }
+    .tipo-card.creado  { border-color: #22c55e; }
+    .tipo-card.error   { border-color: #ef4444; }
+
+    .tipo-header { display: flex; align-items: center; gap: 12px; cursor: pointer; }
+    .tipo-header .form-check-input { width: 1.2em; height: 1.2em; margin-top: 0; border-color: var(--iess-verde); cursor: pointer; }
+    .tipo-header .form-check-input:checked { background-color: var(--iess-verde); border-color: var(--iess-verde); }
+    .tipo-label { font-size: 0.97rem; font-weight: 600; color: #1e293b; margin: 0; }
+    .tipo-badge { font-size: 0.72rem; font-weight: 700; padding: 2px 10px; border-radius: 20px; text-transform: uppercase; letter-spacing: 0.5px; }
+
+    .tipo-body { margin-top: 14px; display: none; }
+    .tipo-body.visible { display: block; }
+
+    .ticket-hijo-result {
+      display: none; margin-top: 10px; padding: 10px 14px;
+      background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 8px;
+      font-size: 0.88rem; color: #166534;
+    }
+    .ticket-hijo-result.visible { display: flex; align-items: center; gap: 8px; }
+
+    .form-footer { padding: 20px 24px; border-top: 1px solid #f0f4f8; display: flex; justify-content: flex-end; gap: 10px; }
+    .btn-guardar { background: var(--iess-verde); color: #fff; border: none; border-radius: 8px; padding: 10px 28px; font-size: 0.95rem; font-weight: 600; cursor: pointer; }
+    .btn-guardar:hover { background: var(--iess-verde-hover); }
+    .btn-guardar:disabled { background: #94a3b8; cursor: not-allowed; }
+    .btn-cancelar { background: #f1f5f9; color: #475569; border: 1px solid #e2e8f0; border-radius: 8px; padding: 10px 20px; font-size: 0.95rem; text-decoration: none; display: inline-flex; align-items: center; }
+
+    /* LOADING OVERLAY */
+    #loading-overlay {
+      display: none; position: fixed; inset: 0;
+      background: rgba(0,0,0,0.6); z-index: 9999;
+      flex-direction: column; align-items: center; justify-content: center; gap: 16px;
+    }
+    #loading-overlay .spinner-border { width: 3.5rem; height: 3.5rem; color: #fff; border-width: 4px; }
+    #loading-overlay p { color: #fff; font-size: 1.05rem; font-weight: 500; margin: 0; text-align: center; }
+    #loading-overlay small { color: rgba(255,255,255,0.7); font-size: 0.82rem; }
+  </style>
+</head>
+<body>
+
+  <!-- LOADING OVERLAY -->
+  <div id="loading-overlay">
+    <div class="spinner-border" role="status"></div>
+    <p id="loading-msg">Creando ticket hijo en Znuny...</p>
+    <small>Por favor espere, esto puede tardar hasta 2 minutos</small>
+  </div>
+
+  <!-- TOPBAR -->
+  <nav class="topbar">
+    <a href="{% url 'home' %}" class="topbar-brand">
+      <i class="bi bi-shield-check-fill" style="font-size:1.3rem"></i>
+      LINEAMIENTOS &mdash; SDNAS
+    </a>
+    <div class="topbar-right">
+      <div class="user-badge">
+        <i class="bi bi-person-circle"></i>
+        {{ request.user.get_full_name|default:request.user.username }}
+      </div>
+      <a href="{% url 'logout' %}" class="btn-logout">
+        <i class="bi bi-box-arrow-right"></i> Salir
+      </a>
+    </div>
+  </nav>
+
+  <!-- SIDEBAR -->
+  <aside class="sidebar">
+    <div class="sidebar-section">
+      <div class="sidebar-section-label">Menu</div>
+      <a href="{% url 'home' %}" class="sidebar-nav-item">
+        <i class="bi bi-house-door"></i> Inicio
+      </a>
+    </div>
+    <div class="sidebar-footer">IESS &mdash; DNTI &copy; {% now "Y" %}</div>
+  </aside>
+
+  <!-- CONTENIDO -->
+  <main class="main-content">
+
+    {% if errores %}
+      <div class="alert alert-danger mb-3">
+        <strong><i class="bi bi-exclamation-triangle me-1"></i>Errores:</strong>
+        <ul class="mb-0 mt-1">{% for e in errores %}<li>{{ e }}</li>{% endfor %}</ul>
+      </div>
+    {% endif %}
+
+    <div class="card-lin">
+
+      <div class="card-lin-header">
+        <i class="bi bi-file-earmark-ruled-fill" style="font-size:1.2rem"></i>
+        <h5>Nuevo Lineamiento</h5>
+        <div class="ms-auto d-flex align-items-center gap-2">
+          <label for="ticketPrincipalInput" class="mb-0" style="font-size:0.85rem; opacity:0.85;">Ticket Principal:</label>
+          <input
+            type="text"
+            id="ticketPrincipalInput"
+            name="ticket_principal"
+            form="formLineamiento"
+            class="form-control form-control-sm"
+            placeholder="Ej: Ticket#2026... o solo el numero"
+            value="{{ ticket_principal }}"
+            autocomplete="off"
+            style="font-family:monospace; font-size:0.88rem; width:260px; background:rgba(255,255,255,0.15); color:#fff; border-color:rgba(255,255,255,0.4);"
+          >
+        </div>
+      </div>
+
+      <form method="post" id="formLineamiento">
+        {% csrf_token %}
+
+        <div class="p-4">
+          <p class="text-muted mb-4" style="font-size:0.9rem;">
+            Seleccione los tipos de lineamiento a generar. Al asignar un responsable
+            se creara automaticamente el ticket hijo en Znuny.
+          </p>
+
+          {% include "partials/tipo_lineamiento.html" with tipo="software"        label="Software"       color="#2563eb" bg="#eff6ff" usuarios=usuarios_software %}
+          {% include "partials/tipo_lineamiento.html" with tipo="bdd"             label="Base de Datos"  color="#7c3aed" bg="#f5f3ff" usuarios=usuarios_bdd %}
+          {% include "partials/tipo_lineamiento.html" with tipo="infraestructura" label="Capacidad"       color="#d97706" bg="#fffbeb" usuarios=usuarios_infraestructura %}
+        </div>
+
+        <div class="form-footer">
+          <a href="{% url 'home' %}" class="btn-cancelar">
+            <i class="bi bi-x-lg me-1"></i> Cancelar
+          </a>
+          <button type="submit" class="btn-guardar" id="btnGuardar" disabled>
+            <i class="bi bi-send me-1"></i> Crear Solicitud
+          </button>
+        </div>
+      </form>
+
+    </div>
+  </main>
+
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+  <script>
+    const CSRF           = '{{ csrf_token }}';
+    const CREAR_HIJO_URL = '{% url "crear_hijo" %}';
+
+    function getTicketPadre() {
+      const val = document.getElementById('ticketPrincipalInput').value;
+      return val.replace(/^ticket#/i, '').trim();
+    }
+
+    const estado = {
+      software:        { creado: false, numero_hijo: '' },
+      bdd:             { creado: false, numero_hijo: '' },
+      infraestructura: { creado: false, numero_hijo: '' },
+    };
+
+    function mostrarLoading(msg) {
+      document.getElementById('loading-msg').textContent = msg || 'Creando ticket hijo en Znuny...';
+      document.getElementById('loading-overlay').style.display = 'flex';
+    }
+    function ocultarLoading() {
+      document.getElementById('loading-overlay').style.display = 'none';
+    }
+    function limpiarTicket(v) {
+      return v.replace(/^ticket#/i, '').trim();
+    }
+
+    function marcarCreado(tipo, numeroHijo) {
+      estado[tipo] = { creado: true, numero_hijo: numeroHijo };
+      document.getElementById(`ticket-hijo-${tipo}`).value = numeroHijo || 'creado';
+      const result = document.getElementById(`result-${tipo}`);
+      result.innerHTML = `<i class="bi bi-check-circle-fill text-success"></i>
+        <span>Ticket hijo ${numeroHijo ? `<strong>#${numeroHijo}</strong>` : 'creado exitosamente'}</span>`;
+      result.classList.add('visible');
+      document.getElementById(`card-${tipo}`).classList.remove('error');
+      document.getElementById(`card-${tipo}`).classList.add('creado');
+      document.getElementById(`status-${tipo}`).innerHTML = '';
+      document.getElementById(`manual-${tipo}`).style.display = 'none';
+      actualizarBotonGuardar();
+    }
+
+    function marcarError(tipo, msg) {
+      estado[tipo] = { creado: false, numero_hijo: '' };
+      document.getElementById(`ticket-hijo-${tipo}`).value = '';
+      document.getElementById(`result-${tipo}`).classList.remove('visible');
+      document.getElementById(`card-${tipo}`).classList.remove('creado');
+      document.getElementById(`card-${tipo}`).classList.add('error');
+      document.getElementById(`status-${tipo}`).innerHTML =
+        `<span class="text-danger fw-semibold"><i class="bi bi-x-circle-fill me-1"></i>${msg}</span>
+         <span class="text-muted ms-2" style="font-size:0.82rem;">Puede ingresar el numero manualmente:</span>`;
+      document.getElementById(`manual-${tipo}`).style.display = 'block';
+      document.getElementById(`manual-input-${tipo}`).value = '';
+      actualizarBotonGuardar();
+    }
+
+    function resetTipo(tipo) {
+      estado[tipo] = { creado: false, numero_hijo: '' };
+      document.getElementById(`ticket-hijo-${tipo}`).value = '';
+      document.getElementById(`status-${tipo}`).innerHTML  = '';
+      document.getElementById(`result-${tipo}`).classList.remove('visible');
+      document.getElementById(`manual-${tipo}`).style.display = 'none';
+      document.getElementById(`manual-input-${tipo}`).value  = '';
+      document.getElementById(`card-${tipo}`).classList.remove('creado', 'error');
+      actualizarBotonGuardar();
+    }
+
+    function actualizarBotonGuardar() {
+      const checked      = [...document.querySelectorAll('.chk-tipo:checked')];
+      const todosCreados = checked.length > 0 && checked.every(c => estado[c.dataset.tipo].creado);
+      document.getElementById('btnGuardar').disabled = !todosCreados;
+    }
+
+    // ── Checkbox ──────────────────────────────────────────────────────────────
+    document.querySelectorAll('.chk-tipo').forEach(chk => {
+      chk.addEventListener('change', function () {
+        const tipo = this.dataset.tipo;
+        const body = document.getElementById(`body-${tipo}`);
+        const card = document.getElementById(`card-${tipo}`);
+        if (this.checked) {
+          body.classList.add('visible');
+          card.classList.add('activo');
+        } else {
+          body.classList.remove('visible');
+          card.classList.remove('activo', 'creado', 'error');
+          document.getElementById(`select-usuario-${tipo}`).value = '';
+          resetTipo(tipo);
+        }
+        actualizarBotonGuardar();
+      });
+    });
+
+    // ── Select usuario: dispara creacion automatica ───────────────────────────
+    document.querySelectorAll('.select-usuario').forEach(sel => {
+      sel.addEventListener('change', function () {
+        const tipo      = this.dataset.tipo;
+        const usuarioId = this.value;
+
+        if (!usuarioId) { resetTipo(tipo); return; }
+
+        this.disabled = true;
+        mostrarLoading(`Creando ticket hijo de ${tipo} en Znuny...`);
+
+        fetch(CREAR_HIJO_URL, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'X-CSRFToken': CSRF },
+          body: [
+            `ticket_padre=${encodeURIComponent(getTicketPadre())}`,
+            `tipo=${encodeURIComponent(tipo)}`,
+            `usuario_id=${encodeURIComponent(usuarioId)}`,
+          ].join('&'),
+        })
+        .then(r => r.json())
+        .then(data => {
+          ocultarLoading();
+          this.disabled = false;
+          if (data.creado) {
+            marcarCreado(tipo, data.numero_hijo || '');
+          } else {
+            marcarError(tipo, data.error || 'El servicio de Znuny no respondio');
+          }
+        })
+        .catch(() => {
+          ocultarLoading();
+          this.disabled = false;
+          marcarError(tipo, 'Error de conexion con el servidor');
+        });
+      });
+    });
+
+    // ── Boton confirmar ticket manual ─────────────────────────────────────────
+    document.querySelectorAll('.btn-manual-confirmar').forEach(btn => {
+      btn.addEventListener('click', function () {
+        const tipo   = this.dataset.tipo;
+        const numero = limpiarTicket(document.getElementById(`manual-input-${tipo}`).value);
+        if (!numero) {
+          document.getElementById(`manual-input-${tipo}`).classList.add('is-invalid');
+          return;
+        }
+        document.getElementById(`manual-input-${tipo}`).classList.remove('is-invalid');
+        marcarCreado(tipo, numero);
+      });
+    });
+
+    // Enter en input manual
+    document.querySelectorAll('[id^="manual-input-"]').forEach(inp => {
+      inp.addEventListener('keydown', e => {
+        if (e.key === 'Enter') {
+          e.preventDefault();
+          const tipo = inp.id.replace('manual-input-', '');
+          document.querySelector(`.btn-manual-confirmar[data-tipo="${tipo}"]`).click();
+        }
+      });
+    });
+
+    // ── Submit ────────────────────────────────────────────────────────────────
+    document.getElementById('formLineamiento').addEventListener('submit', function (e) {
+      const tipos = [...document.querySelectorAll('.chk-tipo:checked')].map(c => c.dataset.tipo);
+      if (tipos.length === 0) { e.preventDefault(); return; }
+      tipos.forEach(t => {
+        const inp = document.createElement('input');
+        inp.type  = 'hidden';
+        inp.name  = 'tipos';
+        inp.value = t;
+        this.appendChild(inp);
+      });
+      mostrarLoading('Guardando lineamiento...');
+    });
+  </script>
+</body>
+</html>

@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Lineamientos IESS - Ingreso</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
+  <style>
+    :root {
+      --iess-verde: #006847;
+      --iess-verde-claro: #009061;
+      --iess-gris: #f4f6f8;
+    }
+
+    body {
+      background: var(--iess-gris);
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-family: 'Segoe UI', sans-serif;
+    }
+
+    .login-card {
+      width: 100%;
+      max-width: 420px;
+      background: #fff;
+      border-radius: 12px;
+      box-shadow: 0 8px 32px rgba(0,0,0,0.10);
+      overflow: hidden;
+    }
+
+    .login-header {
+      background: var(--iess-verde);
+      padding: 32px 24px 24px;
+      text-align: center;
+      color: #fff;
+    }
+
+    .login-header .logo-text {
+      font-size: 1.5rem;
+      font-weight: 700;
+      letter-spacing: 1px;
+    }
+
+    .login-header .sub {
+      font-size: 0.82rem;
+      opacity: 0.85;
+      margin-top: 4px;
+    }
+
+    .login-body {
+      padding: 32px 32px 28px;
+    }
+
+    .form-label {
+      font-size: 0.85rem;
+      font-weight: 600;
+      color: #444;
+    }
+
+    .form-control {
+      border-radius: 8px;
+      border: 1.5px solid #d0d5dd;
+      font-size: 0.95rem;
+      padding: 10px 14px;
+    }
+
+    .form-control:focus {
+      border-color: var(--iess-verde);
+      box-shadow: 0 0 0 3px rgba(0,104,71,0.12);
+    }
+
+    .input-group-text {
+      background: transparent;
+      border: 1.5px solid #d0d5dd;
+      border-left: none;
+      border-radius: 0 8px 8px 0;
+      color: #888;
+      cursor: pointer;
+    }
+
+    .form-control.rounded-end-0 {
+      border-right: none;
+      border-radius: 8px 0 0 8px;
+    }
+
+    .btn-login {
+      background: var(--iess-verde);
+      color: #fff;
+      border: none;
+      border-radius: 8px;
+      padding: 11px;
+      font-size: 1rem;
+      font-weight: 600;
+      width: 100%;
+      margin-top: 6px;
+      transition: background 0.2s;
+    }
+
+    .btn-login:hover {
+      background: var(--iess-verde-claro);
+      color: #fff;
+    }
+
+    .alert {
+      border-radius: 8px;
+      font-size: 0.88rem;
+    }
+
+    .footer-text {
+      text-align: center;
+      font-size: 0.78rem;
+      color: #aaa;
+      margin-top: 18px;
+    }
+  </style>
+</head>
+<body>
+  <div class="login-card">
+    <div class="login-header">
+      <div class="logo-text"><i class="bi bi-shield-lock-fill me-2"></i>LINEAMIENTOS</div>
+      <div class="sub">Sistema de Generacion de Lineamientos Tecnologicos</div>
+      <div class="sub mt-1">SDNAS &mdash; DNTI &mdash; IESS</div>
+    </div>
+
+    <div class="login-body">
+      {% if messages %}
+        {% for msg in messages %}
+          <div class="alert alert-{{ msg.tags }} alert-dismissible fade show py-2" role="alert">
+            <i class="bi bi-exclamation-circle me-1"></i>{{ msg }}
+            <button type="button" class="btn-close btn-sm" data-bs-dismiss="alert"></button>
+          </div>
+        {% endfor %}
+      {% endif %}
+
+      <form method="post" autocomplete="off">
+        {% csrf_token %}
+
+        <div class="mb-3">
+          <label for="username" class="form-label">Usuario</label>
+          <input
+            type="text"
+            id="username"
+            name="username"
+            class="form-control"
+            placeholder="Ingrese su usuario"
+            required
+            autofocus
+          >
+        </div>
+
+        <div class="mb-4">
+          <label for="password" class="form-label">Contrasena</label>
+          <div class="input-group">
+            <input
+              type="password"
+              id="password"
+              name="password"
+              class="form-control rounded-end-0"
+              placeholder="Ingrese su contrasena"
+              required
+            >
+            <span class="input-group-text" onclick="togglePass()">
+              <i class="bi bi-eye" id="eye-icon"></i>
+            </span>
+          </div>
+        </div>
+
+        <button type="submit" class="btn-login">
+          <i class="bi bi-box-arrow-in-right me-2"></i>Ingresar
+        </button>
+      </form>
+
+      <div class="footer-text">
+        &copy; {% now "Y" %} Instituto Ecuatoriano de Seguridad Social
+      </div>
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+  <script>
+    function togglePass() {
+      const inp = document.getElementById('password');
+      const icon = document.getElementById('eye-icon');
+      if (inp.type === 'password') {
+        inp.type = 'text';
+        icon.classList.replace('bi-eye', 'bi-eye-slash');
+      } else {
+        inp.type = 'password';
+        icon.classList.replace('bi-eye-slash', 'bi-eye');
+      }
+    }
+  </script>
+</body>
+</html>

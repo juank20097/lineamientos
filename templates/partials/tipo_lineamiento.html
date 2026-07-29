@@ -1,0 +1,73 @@
+<div class="tipo-card" id="card-{{ tipo }}">
+
+  <div class="tipo-header" onclick="document.getElementById('chk-{{ tipo }}').click()">
+    <input
+      class="form-check-input chk-tipo"
+      type="checkbox"
+      id="chk-{{ tipo }}"
+      data-tipo="{{ tipo }}"
+      onclick="event.stopPropagation()"
+    >
+    <label class="tipo-label" for="chk-{{ tipo }}">Lineamiento de {{ label }}</label>
+    <span class="tipo-badge ms-auto" style="background:{{ bg }}; color:{{ color }};">{{ label }}</span>
+  </div>
+
+  <div class="tipo-body" id="body-{{ tipo }}">
+
+    <!-- Select de usuarios -->
+    <label class="form-label fw-semibold mt-2 mb-1" style="font-size:0.85rem; color:#475569;">
+      Responsable de {{ label }}
+    </label>
+    <select
+      class="form-select select-usuario"
+      id="select-usuario-{{ tipo }}"
+      name="usuario_{{ tipo }}"
+      data-tipo="{{ tipo }}"
+      style="font-size:0.9rem;"
+    >
+      <option value="">-- Seleccione un responsable --</option>
+      {% for u in usuarios %}
+        <option value="{{ u.pk }}" data-nombre="{{ u.get_full_name|default:u.username }}">
+          {{ u.get_full_name|default:u.username }} ({{ u.username }})
+        </option>
+      {% empty %}
+        <option disabled>No hay usuarios con este rol</option>
+      {% endfor %}
+    </select>
+
+    <!-- Mensaje de error -->
+    <div id="status-{{ tipo }}" style="font-size:0.87rem; min-height:20px; margin-top:6px;"></div>
+
+    <!-- Ingreso manual (visible solo si falla la creacion automatica) -->
+    <div id="manual-{{ tipo }}" style="display:none; margin-top:10px;">
+      <label class="form-label fw-semibold mb-1" style="font-size:0.85rem; color:#92400e;">
+        <i class="bi bi-pencil-square me-1"></i>Ingrese el numero de ticket manualmente
+      </label>
+      <div class="d-flex gap-2">
+        <input
+          type="text"
+          class="form-control"
+          id="manual-input-{{ tipo }}"
+          placeholder="Ej: Ticket#2026... o solo el numero"
+          autocomplete="off"
+          style="font-family:monospace; font-size:0.9rem;"
+        >
+        <button
+          type="button"
+          class="btn btn-warning fw-semibold text-dark btn-manual-confirmar"
+          data-tipo="{{ tipo }}"
+          style="white-space:nowrap;"
+        >
+          <i class="bi bi-check-lg me-1"></i>Confirmar
+        </button>
+      </div>
+    </div>
+
+    <!-- Resultado exitoso -->
+    <div class="ticket-hijo-result" id="result-{{ tipo }}"></div>
+
+    <!-- Ticket hijo (hidden, se llena automatica o manualmente) -->
+    <input type="hidden" id="ticket-hijo-{{ tipo }}" name="ticket_hijo_{{ tipo }}" value="">
+
+  </div>
+</div>

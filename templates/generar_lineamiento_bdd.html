@@ -1,0 +1,739 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Lineamiento Base de Datos - IESS</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
+  <style>
+    :root{--bdd:#7c3aed;--bdd-l:#f5f3ff;--topbar-h:56px;--infobar-h:44px;}
+    *{box-sizing:border-box;margin:0;padding:0;}
+    body{font-family:'Segoe UI',sans-serif;background:#f0f2f5;height:100vh;display:flex;flex-direction:column;overflow:hidden;}
+    .topbar{height:var(--topbar-h);background:var(--bdd);display:flex;align-items:center;padding:0 20px;box-shadow:0 2px 8px rgba(0,0,0,.18);flex-shrink:0;}
+    .topbar-brand{color:#fff;font-size:1rem;font-weight:700;display:flex;align-items:center;gap:10px;text-decoration:none;}
+    .topbar-right{margin-left:auto;display:flex;align-items:center;gap:14px;}
+    .user-badge{background:rgba(255,255,255,.15);color:#fff;border-radius:20px;padding:3px 12px;font-size:.8rem;display:flex;align-items:center;gap:6px;}
+    .rol-chip{background:rgba(255,255,255,.2);border-radius:10px;padding:2px 8px;font-size:.74rem;text-transform:uppercase;letter-spacing:.5px;}
+    .btn-logout{background:rgba(255,255,255,.15);border:1px solid rgba(255,255,255,.3);color:#fff;border-radius:7px;padding:4px 12px;font-size:.82rem;text-decoration:none;display:flex;align-items:center;gap:5px;}
+    .info-bar{height:var(--infobar-h);background:#fff;border-bottom:1px solid #e2e8f0;padding:0 20px;display:flex;align-items:center;gap:14px;font-size:.82rem;flex-shrink:0;}
+    .chip{background:var(--bdd-l);border-radius:20px;padding:3px 10px;font-size:.75rem;color:var(--bdd);font-weight:600;}
+    .workspace{display:flex;flex:1;overflow:hidden;}
+
+    /* Left panel */
+    .left-panel{width:50%;display:flex;flex-direction:column;border-right:1px solid #e2e8f0;background:#fff;overflow:hidden;}
+    .upload-zone{display:flex;flex-direction:column;align-items:center;justify-content:center;flex:1;padding:32px;gap:16px;text-align:center;}
+    .upload-box{border:2.5px dashed #c4b5fd;border-radius:14px;padding:40px 32px;cursor:pointer;transition:all .2s;background:#faf5ff;width:100%;max-width:420px;}
+    .upload-box:hover{border-color:var(--bdd);}
+    .upload-box i{font-size:2.5rem;color:#c4b5fd;margin-bottom:12px;}
+    .upload-box p{color:#6b7280;font-size:.92rem;margin:0;}
+    .upload-box .hint{color:#a78bfa;font-size:.8rem;margin-top:6px;}
+    .btn-cargar{background:var(--bdd);color:#fff;border:none;border-radius:8px;padding:10px 24px;font-size:.9rem;font-weight:600;cursor:pointer;display:flex;align-items:center;gap:8px;}
+    .btn-cargar:hover{background:#6d28d9;}
+    .btn-cargar:disabled{background:#94a3b8;cursor:not-allowed;}
+
+    /* Tabs */
+    .tabs-panel{display:none;flex-direction:column;flex:1;overflow:hidden;}
+    .tabs-panel.visible{display:flex;}
+    .tab-nav{display:flex;border-bottom:2px solid #e2e8f0;background:#fafafa;flex-shrink:0;}
+    .tab-btn{padding:10px 16px;font-size:.82rem;font-weight:600;color:#64748b;border:none;background:none;cursor:pointer;border-bottom:2.5px solid transparent;margin-bottom:-2px;display:flex;align-items:center;gap:6px;}
+    .tab-btn.active{color:var(--bdd);border-bottom-color:var(--bdd);}
+    .tab-content{flex:1;overflow:hidden;display:flex;flex-direction:column;}
+    .tab-pane{display:none;flex:1;overflow:auto;}
+    .tab-pane.active{display:flex;flex-direction:column;}
+
+    /* Diagrama */
+    .diagrama-toolbar{display:flex;align-items:center;gap:6px;padding:6px 12px;background:#fafafa;border-bottom:1px solid #e2e8f0;flex-shrink:0;}
+    .zoom-btn{background:#fff;border:1px solid #e2e8f0;border-radius:6px;padding:4px 10px;cursor:pointer;font-size:.8rem;color:#374151;}
+    .zoom-btn:hover{background:var(--bdd-l);border-color:var(--bdd);color:var(--bdd);}
+    .zoom-level{font-size:.78rem;color:#64748b;min-width:42px;text-align:center;}
+    #diagramaWrap{flex:1;overflow:auto;background:#f8fafc;position:relative;}
+    #diagramaCanvas{transform-origin:top left;transition:transform .1s;}
+    .tabla-box{position:absolute;background:#fff;border:2px solid var(--bdd);border-radius:8px;min-width:200px;box-shadow:0 2px 8px rgba(124,58,237,.15);user-select:none;}
+    .tabla-box-header{background:var(--bdd);color:#fff;padding:6px 10px;font-size:.78rem;font-weight:700;border-radius:6px 6px 0 0;cursor:move;}
+    .tabla-box-col{padding:3px 10px;font-size:.7rem;color:#374151;border-bottom:1px solid #f1f5f9;display:flex;align-items:center;gap:4px;}
+    .tabla-box-col:last-child{border-bottom:none;}
+    .pk-icon{color:#f59e0b;font-size:.6rem;}
+    .fk-icon{color:#3b82f6;font-size:.6rem;}
+    svg.fk-lines{position:absolute;top:0;left:0;pointer-events:none;overflow:visible;}
+
+    /* Tab tablas */
+    #tablasContent{padding:12px;overflow:auto;}
+    .table-nombre{font-size:.9rem;font-weight:700;color:var(--bdd);margin:16px 0 6px;display:flex;align-items:center;gap:6px;}
+    .table-bdd{font-size:.78rem;width:100%;border-collapse:collapse;margin-bottom:20px;}
+    .table-bdd th{background:var(--bdd);color:#fff;padding:7px 10px;text-align:left;}
+    .table-bdd td{padding:5px 8px;border:1px solid #e5e7eb;vertical-align:top;}
+    .table-bdd td[contenteditable]{outline:none;cursor:text;}
+    .table-bdd td[contenteditable]:focus{background:#f5f3ff;outline:1px solid var(--bdd);}
+    .badge-pk{background:#fef3c7;color:#92400e;border-radius:4px;padding:1px 5px;font-size:.65rem;}
+    .badge-fk{background:#dbeafe;color:#1e40af;border-radius:4px;padding:1px 5px;font-size:.65rem;}
+
+    /* Tab SQL */
+    #sqlRaw{font-family:monospace;font-size:.76rem;background:#1e1e2e;color:#cdd6f4;padding:16px;white-space:pre;overflow:auto;flex:1;border:none;width:100%;resize:none;}
+
+    /* Right panel */
+    .right-panel{flex:1;display:flex;flex-direction:column;overflow:hidden;background:#fff;}
+    .preview-head{padding:10px 16px;border-bottom:1px solid #e8ecf0;display:flex;align-items:center;gap:10px;flex-shrink:0;}
+    .preview-head h6{margin:0;font-size:.88rem;font-weight:700;}
+    .preview-count{font-size:.75rem;color:#94a3b8;}
+    .btn-finalizar{display:none;margin-left:auto;background:var(--bdd);color:#fff;border:none;border-radius:7px;padding:6px 16px;font-size:.8rem;font-weight:700;cursor:pointer;align-items:center;gap:6px;}
+    .btn-finalizar.visible{display:flex;}
+    .preview-wrap{flex:1;overflow:auto;}
+    .doc-table{border-collapse:collapse;width:100%;font-size:.75rem;min-width:900px;}
+    .doc-table thead tr{background:var(--bdd);color:#fff;}
+    .doc-table thead th{padding:8px 6px;text-align:center;font-weight:700;border:1px solid #5b21b6;font-size:.72rem;}
+    .doc-table tbody td{border:1px solid #d1d5db;padding:6px;vertical-align:top;}
+    .doc-table td.num{text-align:center;font-weight:700;color:#475569;width:32px;}
+    .doc-table td.tipo{text-align:center;color:var(--bdd);font-weight:700;width:40px;}
+    .doc-table td.fecha{text-align:center;color:#64748b;white-space:nowrap;width:80px;}
+    .td-acc{width:36px;text-align:center;vertical-align:middle!important;}
+    .btn-del{background:none;border:none;color:#e2e8f0;cursor:pointer;padding:2px 5px;border-radius:5px;font-size:.85rem;}
+    .btn-del:hover{color:#ef4444;background:#fef2f2;}
+    [contenteditable="true"]{outline:none;border-radius:4px;min-height:20px;white-space:pre-wrap;word-break:break-word;}
+    [contenteditable="true"]:focus{background:#f5f3ff;box-shadow:inset 0 0 0 1.5px var(--bdd);}
+    .empty-preview{display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;color:#cbd5e1;text-align:center;padding:32px;}
+    .empty-preview i{font-size:3rem;margin-bottom:12px;}
+
+    #loading-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:9999;flex-direction:column;align-items:center;justify-content:center;gap:16px;}
+    #loading-overlay .spinner-border{width:3rem;height:3rem;color:#fff;}
+    #loading-overlay p{color:#fff;font-size:1rem;font-weight:500;margin:0;}
+  </style>
+</head>
+<body>
+  <div id="loading-overlay">
+    <div class="spinner-border" role="status"></div>
+    <p id="loading-msg">Procesando SQL...</p>
+    <small style="color:rgba(255,255,255,.7);font-size:.82rem;">Por favor espere</small>
+  </div>
+
+  <nav class="topbar">
+    <a href="{% url 'home' %}" class="topbar-brand"><i class="bi bi-database-fill me-1"></i> LINEAMIENTO BDD &mdash; SDNAS</a>
+    <div class="topbar-right">
+      <div class="user-badge"><i class="bi bi-person-circle"></i>{{ request.user.get_full_name|default:request.user.username }}<span class="rol-chip">{{ request.user.get_rol_display }}</span></div>
+      <a href="{% url 'logout' %}" class="btn-logout"><i class="bi bi-box-arrow-right"></i> Salir</a>
+    </div>
+  </nav>
+
+  <div class="info-bar">
+    <a href="{% url 'home' %}" style="color:#64748b;text-decoration:none;font-size:.8rem;"><i class="bi bi-arrow-left me-1"></i>Inicio</a>
+    <span class="chip"><i class="bi bi-ticket-detailed me-1"></i>#{{ detalle.lineamiento.ticket_principal }}</span>
+    <span class="chip"><i class="bi bi-ticket me-1"></i>#{{ detalle.ticket_interno }}</span>
+    <span class="chip"><i class="bi bi-database me-1"></i>Base de Datos</span>
+    {% if modo != 'nuevo' %}<span class="chip" style="background:#fef9ec;color:#92400e;">{% if modo == 'actualizar' %}Actualizando{% else %}Nueva versión{% endif %}{% if ticket_nv %} · #{{ ticket_nv }}{% endif %}</span>{% endif %}
+  </div>
+
+  <div class="workspace">
+    <div class="left-panel">
+
+      <!-- Upload -->
+      <div class="upload-zone" id="uploadZone">
+        <div class="upload-box" id="dropZone" onclick="document.getElementById('sqlFileInput').click()">
+          <i class="bi bi-file-earmark-code"></i>
+          <p><strong>Arrastra tu archivo .sql aquí</strong><br>o haz clic para seleccionarlo</p>
+          <span class="hint">Solo archivos .sql de Oracle</span>
+        </div>
+        <input type="file" id="sqlFileInput" accept=".sql" style="display:none;">
+        <button class="btn-cargar" id="btnCargarSQL" disabled>
+          <i class="bi bi-upload"></i> Cargar y Analizar
+        </button>
+        <p id="fileSelectedName" style="font-size:.82rem;color:#6b7280;"></p>
+      </div>
+
+      <!-- Tabs -->
+      <div class="tabs-panel" id="tabsPanel">
+        <div class="tab-nav">
+          <button class="tab-btn active" data-tab="tab-diagrama"><i class="bi bi-diagram-3"></i>Diagrama</button>
+          <button class="tab-btn" data-tab="tab-tablas"><i class="bi bi-table"></i>Tablas</button>
+          <button class="tab-btn" data-tab="tab-sql"><i class="bi bi-code-slash"></i>SQL</button>
+          {% if modo == 'nuevo' and not ya_generado %}
+          <button id="btnReiniciarSQL" style="margin-left:auto;background:none;border:1px solid #e2e8f0;color:#94a3b8;border-radius:20px;padding:3px 12px;font-size:.75rem;cursor:pointer;align-self:center;margin-right:8px;">
+            <i class="bi bi-arrow-counterclockwise me-1"></i>Reiniciar
+          </button>
+          {% endif %}
+        </div>
+        <div class="tab-content">
+          <div class="tab-pane active" id="tab-diagrama">
+            <div class="diagrama-toolbar">
+              <button class="zoom-btn" id="btnZoomIn"><i class="bi bi-zoom-in"></i></button>
+              <span class="zoom-level" id="zoomLabel">100%</span>
+              <button class="zoom-btn" id="btnZoomOut"><i class="bi bi-zoom-out"></i></button>
+              <button class="zoom-btn" id="btnZoomReset"><i class="bi bi-arrows-fullscreen"></i> Reset</button>
+              <span style="font-size:.75rem;color:#94a3b8;margin-left:8px;">Rueda del ratón para zoom · Arrastra los cuadros</span>
+            </div>
+            <div id="diagramaWrap">
+              <div id="diagramaCanvas">
+                <svg class="fk-lines" id="fkSvg"></svg>
+              </div>
+            </div>
+          </div>
+
+          <!-- Tab Tablas -->
+          <div class="tab-pane" id="tab-tablas">
+            <div id="tablasContent" style="padding:12px;overflow:auto;"></div>
+          </div>
+
+          <!-- Tab SQL -->
+          <div class="tab-pane" id="tab-sql">
+            <div style="display:flex;gap:8px;padding:8px 12px;background:#2a2a3e;flex-shrink:0;">
+              <button id="btnEditarSQL" style="background:#7c3aed;color:#fff;border:none;border-radius:6px;padding:5px 14px;font-size:.8rem;cursor:pointer;display:flex;align-items:center;gap:6px;">
+                <i class="bi bi-pencil-square me-1"></i>Editar SQL
+              </button>
+              <button id="btnGuardarSQL" style="display:none;background:#16a34a;color:#fff;border:none;border-radius:6px;padding:5px 14px;font-size:.8rem;cursor:pointer;display:none;align-items:center;gap:6px;">
+                <i class="bi bi-arrow-repeat me-1"></i>Aplicar cambios
+              </button>
+              <button id="btnCancelarSQL" style="display:none;background:#475569;color:#fff;border:none;border-radius:6px;padding:5px 14px;font-size:.8rem;cursor:pointer;">
+                Cancelar
+              </button>
+              <span id="sqlEditHint" style="font-size:.75rem;color:#94a3b8;align-self:center;display:none;">Edita el SQL y haz clic en <strong style="color:#86efac;">Aplicar cambios</strong> para actualizar el diagrama y las tablas.</span>
+            </div>
+            <textarea id="sqlRaw" readonly></textarea>
+          </div>
+
+        </div>{# /tab-content #}
+      </div>{# /tabs-panel #}
+    </div>
+
+    <!-- Right panel -->
+    <div class="right-panel">
+      <div class="preview-head">
+        <h6><i class="bi bi-file-earmark-spreadsheet me-1" style="color:var(--bdd);"></i>Lineamientos BDD</h6>
+        <span class="preview-count" id="previewCount">0 lineamientos</span>
+        <button class="btn-finalizar {% if modo != 'nuevo' %}visible{% endif %}" id="btnFinalizar">
+          <i class="bi bi-check2-circle"></i>
+          {% if modo == 'actualizar' %}Guardar Cambios{% elif modo == 'nueva_version' %}Guardar Nueva Versión{% else %}Finalizar{% endif %}
+        </button>
+      </div>
+      <div class="preview-wrap">
+        <div class="empty-preview" id="emptyState">
+          <i class="bi bi-database" style="color:#c4b5fd;"></i>
+          <p>Carga el archivo .sql para generar los lineamientos.</p>
+        </div>
+        <table class="doc-table" id="docTable" style="display:none;">
+          <thead>
+            <tr><th>#</th><th>Responsable</th><th>Tipo</th><th>Necesidad</th><th>Lineamiento</th><th>Mecanismo de Implementación</th><th>Fecha</th><th>Observación</th><th></th></tr>
+          </thead>
+          <tbody id="docBody"></tbody>
+          <tfoot>
+            <tr><td colspan="9" style="padding:6px 10px;border:1px solid #d1d5db;">
+              <button id="btnAddRow" style="background:none;border:1.5px dashed #94a3b8;color:#64748b;border-radius:7px;padding:4px 14px;font-size:.75rem;cursor:pointer;display:flex;align-items:center;gap:6px;">
+                <i class="bi bi-plus-lg"></i> Agregar fila en blanco
+              </button>
+            </td></tr>
+          </tfoot>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+  <script>
+    const CSRF          = '{{ csrf_token }}';
+    const CARGAR_URL    = '{% url "cargar_sql" detalle.pk %}';
+    const FINALIZAR_URL = '{% url "finalizar_lineamiento" detalle.pk %}';
+    const RESPONSABLE   = '{{ request.user.get_full_name|default:request.user.username }}';
+    const HOY           = new Date().toLocaleDateString('es-EC',{day:'2-digit',month:'2-digit',year:'numeric'});
+    const MODO          = '{{ modo }}';
+    const TICKET_NV     = '{{ ticket_nv }}';
+    const FILAS_PRECARGA = {{ filas_precarga|safe }};
+    const BDD_PRECARGA   = {{ bdd_precarga|safe }};
+
+    function mostrarLoading(msg){ document.getElementById('loading-msg').textContent=msg||'Procesando...'; document.getElementById('loading-overlay').style.display='flex'; }
+    function ocultarLoading(){ document.getElementById('loading-overlay').style.display='none'; }
+
+    // ── TABS ──
+    document.querySelectorAll('.tab-btn').forEach(btn=>{
+      btn.addEventListener('click',function(){
+        document.querySelectorAll('.tab-btn').forEach(b=>b.classList.remove('active'));
+        document.querySelectorAll('.tab-pane').forEach(p=>p.classList.remove('active'));
+        this.classList.add('active');
+        document.getElementById(this.dataset.tab).classList.add('active');
+      });
+    });
+
+    // ── VALIDADOR DE ESTRUCTURA SQL ──
+    function validarEstructuraSQL(sql){
+      const errores = [];
+
+      // 1. Parentesis balanceados
+      let depth = 0;
+      for(const ch of sql){
+        if(ch==='(') depth++;
+        else if(ch===')') depth--;
+        if(depth < 0){ errores.push('Paréntesis de cierre ) sin apertura correspondiente.'); depth=0; }
+      }
+      if(depth > 0) errores.push(`${depth} paréntesis sin cerrar — falta(n) ${depth} cierre(s) ).`);
+
+      // 2. Cada CREATE TABLE debe terminar con ); 
+      const nCreate  = (sql.match(/CREATE\s+TABLE/gi)||[]).length;
+      const nCerrado = (sql.match(/CREATE\s+TABLE[\s\S]+?\)\s*;/gi)||[]).length;
+      if(nCreate > 0 && nCerrado < nCreate)
+        errores.push(`${nCreate - nCerrado} CREATE TABLE sin cerrar correctamente con );`);
+
+      // 3. Cada CREATE SEQUENCE debe tener nombre valido
+      for(const m of sql.matchAll(/CREATE\s+SEQUENCE\s+(\S+)/gi)){
+        if(!/^[\w.]+$/.test(m[1]))
+          errores.push(`Nombre de secuencia inválido: "${m[1]}"`);
+      }
+
+      // 4. Dentro de cada CREATE TABLE, cada linea de columna debe tener nombre + tipo
+      for(const m of sql.matchAll(/CREATE\s+TABLE\s+\S+\s*\(([\s\S]+?)\)\s*;/gi)){
+        const body = m[1];
+        const lineas = body.split('\n').map(l=>l.trim().replace(/,$/, '')).filter(l=>l &&
+          !l.match(/^(CONSTRAINT|PRIMARY|FOREIGN|UNIQUE|CHECK|--)/i));
+        lineas.forEach(line=>{
+          if(line && !line.match(/^\w+\s+\w+/)){
+            errores.push(`Definición de columna inválida: "${line.substring(0,60)}"`);
+          }
+        });
+      }
+
+      // 5. ALTER TABLE debe tener ADD CONSTRAINT o ADD COLUMN
+      for(const m of sql.matchAll(/ALTER\s+TABLE\s+\S+\s+(.*?);/gi)){
+        const body = m[1].trim();
+        if(!body.match(/^(ADD|MODIFY|DROP|RENAME)/i))
+          errores.push(`ALTER TABLE con cláusula desconocida: "${body.substring(0,60)}"`);
+      }
+
+      return errores;
+    }
+
+    // ── EDITAR SQL ──
+    let sqlBackup = '';
+    const sqlRaw      = document.getElementById('sqlRaw');
+    const btnEditar   = document.getElementById('btnEditarSQL');
+    const btnGuardar  = document.getElementById('btnGuardarSQL');
+    const btnCancelar = document.getElementById('btnCancelarSQL');
+    const sqlHint     = document.getElementById('sqlEditHint');
+
+    btnEditar.addEventListener('click', ()=>{
+      sqlBackup = sqlRaw.value;
+      sqlRaw.removeAttribute('readonly');
+      sqlRaw.style.background = '#12122a';
+      sqlRaw.style.outline    = '2px solid #7c3aed';
+      sqlRaw.focus();
+      btnEditar.style.display   = 'none';
+      btnGuardar.style.display  = 'flex';
+      btnCancelar.style.display = 'block';
+      sqlHint.style.display     = 'block';
+    });
+
+    btnCancelar.addEventListener('click', ()=>{
+      sqlRaw.value = sqlBackup;
+      sqlRaw.setAttribute('readonly', '');
+      sqlRaw.style.background = '#1e1e2e';
+      sqlRaw.style.outline    = 'none';
+      btnEditar.style.display   = 'flex';
+      btnGuardar.style.display  = 'none';
+      btnCancelar.style.display = 'none';
+      sqlHint.style.display     = 'none';
+    });
+
+    btnGuardar.addEventListener('click', ()=>{
+      const nuevoSQL = sqlRaw.value;
+      if(!nuevoSQL.trim()){alert('El SQL no puede estar vacio.'); return;}
+
+      // ── VALIDACION DE ESTRUCTURA ──
+      const erroresSQL = validarEstructuraSQL(nuevoSQL);
+      if(erroresSQL.length){
+        alert('El SQL tiene errores de estructura:\n\n' + erroresSQL.map((e,i)=>`${i+1}. ${e}`).join('\n'));
+        return;
+      }
+      mostrarLoading('Reparsando SQL y actualizando diagrama...');
+      // Re-parsear en el frontend via AJAX (reutilizando el endpoint con un Blob)
+      const blob   = new Blob([nuevoSQL], {type:'text/plain'});
+      const file   = new File([blob], 'schema.sql', {type:'text/plain'});
+      const fd     = new FormData(); fd.append('sql_file', file);
+      fetch(CARGAR_URL,{method:'POST',headers:{'X-CSRFToken':CSRF},body:fd})
+      .then(r=>r.json())
+      .then(data=>{
+        ocultarLoading();
+        if(!data.ok){alert('Error al parsear: '+data.error); return;}
+        // Actualizar datos globales
+        SCHEMA    = data.schema    || SCHEMA;
+        TABLES    = data.tables    || {};
+        SEQUENCES = data.sequences || [];
+        // Cerrar modo edicion
+        sqlRaw.setAttribute('readonly','');
+        sqlRaw.style.background = '#1e1e2e';
+        sqlRaw.style.outline    = 'none';
+        btnEditar.style.display   = 'flex';
+        btnGuardar.style.display  = 'none';
+        btnCancelar.style.display = 'none';
+        sqlHint.style.display     = 'none';
+        // Actualizar SQL regenerado
+        actualizarSQL();
+        // Actualizar diagrama y tablas
+        tablePositions = {};
+        dibujarDiagrama();
+        renderTablasTab();
+      })
+      .catch(()=>{ ocultarLoading(); alert('Error de conexion.'); });
+    });
+
+    // ── REINICIAR SQL ──
+    document.getElementById('btnReiniciarSQL')?.addEventListener('click',()=>{
+      if(!confirm('\u00bfReiniciar? Se perder\u00e1 el an\u00e1lisis actual del SQL.')) return;
+      SCHEMA=''; TABLES={}; SEQUENCES=[];
+      sqlFile=null;
+      document.getElementById('sqlFileInput').value='';
+      document.getElementById('fileSelectedName').textContent='';
+      document.getElementById('btnCargarSQL').disabled=true;
+      document.getElementById('uploadZone').style.display='flex';
+      document.getElementById('tabsPanel').classList.remove('visible');
+      document.getElementById('diagramaCanvas').innerHTML='<svg class="fk-lines" id="fkSvg" style="position:absolute;top:0;left:0;overflow:visible;pointer-events:none;"></svg>';
+      document.getElementById('tablasContent').innerHTML='';
+      document.getElementById('sqlRaw').value='';
+      docBody.innerHTML=''; docTable.style.display='none'; emptyState.style.display='flex';
+      document.getElementById('previewCount').textContent='0 lineamientos';
+      document.getElementById('btnFinalizar').classList.remove('visible');
+      zoomLevel=1; aplicarZoom();
+    });
+
+    // ── UPLOAD ──
+    let sqlFile=null;
+    const sqlInput=document.getElementById('sqlFileInput');
+    const btnCargar=document.getElementById('btnCargarSQL');
+    const dropZone=document.getElementById('dropZone');
+
+    sqlInput.addEventListener('change',e=>{ sqlFile=e.target.files[0]; if(sqlFile){document.getElementById('fileSelectedName').textContent=sqlFile.name; btnCargar.disabled=false;} });
+    dropZone.addEventListener('dragover',e=>{e.preventDefault(); dropZone.style.borderColor='var(--bdd)';});
+    dropZone.addEventListener('dragleave',()=>{dropZone.style.borderColor='#c4b5fd';});
+    dropZone.addEventListener('drop',e=>{e.preventDefault(); dropZone.style.borderColor='#c4b5fd'; sqlFile=e.dataTransfer.files[0]; if(sqlFile){document.getElementById('fileSelectedName').textContent=sqlFile.name; btnCargar.disabled=false;}});
+
+    btnCargar.addEventListener('click',()=>{
+      if(!sqlFile) return;
+      const fd=new FormData(); fd.append('sql_file',sqlFile);
+      btnCargar.disabled=true; mostrarLoading('Analizando el archivo SQL...');
+      fetch(CARGAR_URL,{method:'POST',headers:{'X-CSRFToken':CSRF},body:fd})
+      .then(r=>r.json())
+      .then(data=>{ ocultarLoading(); btnCargar.disabled=false; if(!data.ok){alert('Error: '+data.error);return;} procesarSQL(data); })
+      .catch(()=>{ocultarLoading(); btnCargar.disabled=false; alert('Error de conexion.');});
+    });
+
+    // ── DATOS ──
+    let SCHEMA=''; let TABLES={}; let SEQUENCES=[];
+
+    function procesarSQL(data){
+      SCHEMA=data.schema||''; TABLES=data.tables||{}; SEQUENCES=data.sequences||[];
+      document.getElementById('uploadZone').style.display='none';
+      document.getElementById('tabsPanel').classList.add('visible');
+      renderTablasTab();
+      actualizarSQL();
+      dibujarDiagrama();
+      generarFilasLineamientos();
+    }
+
+    // ── ZOOM ──
+    let zoomLevel=1;
+    const canvas=document.getElementById('diagramaCanvas');
+
+    function aplicarZoom(){
+      canvas.style.transform=`scale(${zoomLevel})`;
+      document.getElementById('zoomLabel').textContent=Math.round(zoomLevel*100)+'%';
+    }
+    document.getElementById('btnZoomIn').addEventListener('click',()=>{zoomLevel=Math.min(3,zoomLevel+0.1); aplicarZoom();});
+    document.getElementById('btnZoomOut').addEventListener('click',()=>{zoomLevel=Math.max(0.2,zoomLevel-0.1); aplicarZoom();});
+    document.getElementById('btnZoomReset').addEventListener('click',()=>{zoomLevel=1; aplicarZoom();});
+    document.getElementById('diagramaWrap').addEventListener('wheel',e=>{
+      if(e.ctrlKey||e.metaKey||true){
+        e.preventDefault();
+        zoomLevel=Math.max(0.2,Math.min(3,zoomLevel-(e.deltaY>0?0.1:-0.1)));
+        aplicarZoom();
+      }
+    },{passive:false});
+
+    // ── DIAGRAMA ──
+    let tablePositions={};
+
+    function dibujarDiagrama(){
+      canvas.innerHTML='<svg class="fk-lines" id="fkSvg" style="position:absolute;top:0;left:0;overflow:visible;pointer-events:none;"></svg>';
+      const names=Object.keys(TABLES); if(!names.length) return;
+      const cols=Math.max(1,Math.ceil(Math.sqrt(names.length)));
+      const W=210; const GAP_X=50; const GAP_Y=40; const HDR=30; const ROW_H=22;
+
+      names.forEach((tname,i)=>{
+        const tdata=TABLES[tname];
+        const col=i%cols; const row=Math.floor(i/cols);
+        const x=col*(W+GAP_X)+20; const y=row*(HDR+tdata.columns.length*ROW_H+GAP_Y)+20;
+        const h=HDR+tdata.columns.length*ROW_H;
+        tablePositions[tname]={x,y,w:W,h};
+
+        const box=document.createElement('div');
+        box.className='tabla-box'; box.dataset.table=tname;
+        box.style.cssText=`left:${x}px;top:${y}px;width:${W}px;`;
+
+        let colsHtml=tdata.columns.map(col=>{
+          const isPk=col.pk; const isFk=tdata.fks.some(fk=>fk.columns.includes(col.name));
+          return `<div class="tabla-box-col">
+            ${isPk?'<i class="bi bi-key-fill pk-icon"></i>':''}
+            ${isFk?'<i class="bi bi-link-45deg fk-icon"></i>':''}
+            <span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${col.name}</span>
+            <span style="color:#94a3b8;font-size:.62rem;">${col.type}${col.size?'('+col.size+')':''}</span>
+          </div>`;
+        }).join('');
+        box.innerHTML=`<div class="tabla-box-header">${tname}</div>${colsHtml}`;
+        makeDraggable(box,tname);
+        canvas.appendChild(box);
+      });
+
+      setTimeout(()=>dibujarRelaciones(),60);
+    }
+
+    function makeDraggable(el,tname){
+      const hdr=el.querySelector('.tabla-box-header');
+      let ox,oy,ex,ey;
+      hdr.addEventListener('mousedown',e=>{
+        e.preventDefault(); ox=e.clientX; oy=e.clientY;
+        ex=parseInt(el.style.left)||0; ey=parseInt(el.style.top)||0;
+        const mm=mv=>{
+          el.style.left=(ex+(mv.clientX-ox)/zoomLevel)+'px';
+          el.style.top=(ey+(mv.clientY-oy)/zoomLevel)+'px';
+          tablePositions[tname].x=parseInt(el.style.left);
+          tablePositions[tname].y=parseInt(el.style.top);
+          dibujarRelaciones();
+        };
+        const mu=()=>{document.removeEventListener('mousemove',mm);document.removeEventListener('mouseup',mu);};
+        document.addEventListener('mousemove',mm); document.addEventListener('mouseup',mu);
+      });
+    }
+
+    function dibujarRelaciones(){
+      const svg=document.getElementById('fkSvg'); if(!svg) return;
+      svg.innerHTML='<defs><marker id="arr" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto"><path d="M0,0 L0,6 L9,3 z" fill="#7c3aed"/></marker></defs>';
+      for(const [tname,tdata] of Object.entries(TABLES)){
+        tdata.fks.forEach(fk=>{
+          const src=tablePositions[tname]; const dst=tablePositions[fk.ref_table];
+          if(!src||!dst) return;
+          const x1=src.x+src.w; const y1=src.y+src.h/2;
+          const x2=dst.x; const y2=dst.y+dst.h/2;
+          const cx=(x1+x2)/2;
+          const path=document.createElementNS('http://www.w3.org/2000/svg','path');
+          path.setAttribute('d',`M${x1},${y1} C${cx},${y1} ${cx},${y2} ${x2},${y2}`);
+          path.setAttribute('stroke','#7c3aed'); path.setAttribute('stroke-width','1.5');
+          path.setAttribute('fill','none'); path.setAttribute('marker-end','url(#arr)');
+          svg.appendChild(path);
+        });
+      }
+    }
+
+    // ── TAB TABLAS (todos editable, sync con diagrama y SQL) ──
+    function renderTablasTab(){
+      let html='';
+      for(const [tname,tdata] of Object.entries(TABLES)){
+        html+=`<div class="table-nombre"><i class="bi bi-table me-1"></i>${tname}</div>
+        <table class="table-bdd" data-table="${tname}">
+          <thead><tr><th>Campo</th><th>Tipo</th><th>Tamaño</th><th>Nulo</th><th>Descripción</th></tr></thead>
+          <tbody>`;
+        tdata.columns.forEach((col,ci)=>{
+          const isPk=col.pk; const isFk=tdata.fks.some(fk=>fk.columns.includes(col.name));
+          html+=`<tr data-col="${ci}">
+            <td contenteditable="true" data-field="name">${isPk?'<span class="badge-pk">PK</span> ':''}${isFk?'<span class="badge-fk">FK</span> ':''}${col.name}</td>
+            <td contenteditable="true" data-field="type">${col.type}</td>
+            <td contenteditable="true" data-field="size">${col.size}</td>
+            <td contenteditable="true" data-field="nullable">${col.nullable}</td>
+            <td contenteditable="true" data-field="description">${col.description}</td>
+          </tr>`;
+        });
+        html+='</tbody></table>';
+      }
+      document.getElementById('tablasContent').innerHTML=html||'<p style="color:#9ca3af;">No se encontraron tablas.</p>';
+
+      // Listeners de edicion + limpiar error al escribir
+      document.querySelectorAll('#tablasContent td[contenteditable]').forEach(td=>{
+        td.addEventListener('input',function(){
+          if(this.innerText.trim()){
+            this.classList.remove('campo-error');
+            this.style.outline='';
+            this.style.background='';
+          }
+        });
+        td.addEventListener('blur',function(){
+          const tr=this.closest('tr'); const tbl=this.closest('table');
+          const tname=tbl.dataset.table; const ci=parseInt(tr.dataset.col);
+          const field=this.dataset.field;
+          // Limpiar badges del texto
+          const rawText=this.innerText.trim();
+          if(TABLES[tname]&&TABLES[tname].columns[ci]){
+            TABLES[tname].columns[ci][field]=rawText;
+          }
+          // Sync
+          dibujarDiagrama();
+          actualizarSQL();
+        });
+      });
+    }
+
+    // ── GENERAR SQL actualizado ──
+    function actualizarSQL(){
+      const schema=SCHEMA.toUpperCase();
+      let sql='';
+      for(const [tname,tdata] of Object.entries(TABLES)){
+        sql+=`CREATE TABLE ${schema}.${tname} (\n`;
+        const lines=tdata.columns.map(col=>{
+          let def=`    ${col.name.padEnd(30)} ${col.type}`;
+          if(col.size) def+=`(${col.size})`;
+          if(col.nullable==='NO') def+=' NOT NULL';
+          return def;
+        });
+        // PKs
+        if(tdata.pks.length){
+          lines.push(`    CONSTRAINT ${tname.toLowerCase()}_pk PRIMARY KEY ( ${tdata.pks.join(', ')} )`);
+        }
+        sql+=lines.join(',\n')+'\n);\n\n';
+        // Comments
+        tdata.columns.filter(c=>c.description).forEach(col=>{
+          sql+=`COMMENT ON COLUMN ${schema}.${tname}.${col.name} IS\n    '${col.description}';\n`;
+        });
+        sql+='\n';
+        // FKs
+        tdata.fks.forEach(fk=>{
+          sql+=`ALTER TABLE ${tname} ADD CONSTRAINT ${tname.toLowerCase()}_fk FOREIGN KEY ( ${fk.columns.join(', ')} ) REFERENCES ${fk.ref_table} ( ${fk.ref_columns.join(', ')} );\n`;
+        });
+      }
+      // Sequences
+      SEQUENCES.forEach(seq=>{
+        sql+=`CREATE SEQUENCE ${schema}.${seq}\n    START WITH 1\n    INCREMENT BY 1;\n\n`;
+      });
+      document.getElementById('sqlRaw').value=sql;
+    }
+
+    // ── LINEAMIENTOS (panel derecho) ──
+    const docBody=document.getElementById('docBody');
+    const docTable=document.getElementById('docTable');
+    const emptyState=document.getElementById('emptyState');
+
+    function renumerar(){
+      [...docBody.querySelectorAll('tr')].forEach((tr,i)=>tr.querySelector('.num').textContent=i+1);
+      document.getElementById('previewCount').textContent=`${docBody.children.length} lineamiento${docBody.children.length!==1?'s':''}`;
+    }
+
+    function crearFila(g){
+      const tr=document.createElement('tr');
+      tr.innerHTML=`
+        <td class="num"></td><td>${RESPONSABLE}</td><td class="tipo">BDD</td>
+        <td contenteditable="true">${g?.necesidad??''}</td>
+        <td contenteditable="true">${g?.lineamiento??''}</td>
+        <td contenteditable="true">${g?.mecanismo??''}</td>
+        <td class="fecha">${HOY}</td>
+        <td contenteditable="true">${g?.observacion??''}</td>
+        <td class="td-acc"><button class="btn-del"><i class="bi bi-trash3"></i></button></td>`;
+      tr.querySelector('.btn-del').addEventListener('click',()=>{
+        tr.style.transition='opacity .2s'; tr.style.opacity='0';
+        setTimeout(()=>{tr.remove();renumerar();},200);
+      });
+      return tr;
+    }
+
+    function generarFilasLineamientos(){
+      docBody.innerHTML='';
+      const schema=SCHEMA.toUpperCase();
+      const tablenames=Object.keys(TABLES);
+
+      // UNA sola fila con todas las tablas
+      if(tablenames.length){
+        const nec=`En el esquema ${schema} crear las siguientes tablas:\n${tablenames.join('\n')}`;
+        docBody.appendChild(crearFila({necesidad:nec,lineamiento:'',mecanismo:'',observacion:''}));
+      }
+      // UNA sola fila con todas las secuencias
+      if(SEQUENCES.length){
+        const nec=`En el esquema ${schema} crear las siguientes secuencias:\n${SEQUENCES.join('\n')}`;
+        docBody.appendChild(crearFila({necesidad:nec,lineamiento:'',mecanismo:'',observacion:''}));
+      }
+
+      emptyState.style.display='none'; docTable.style.display='table'; renumerar();
+      document.getElementById('btnFinalizar').classList.add('visible');
+    }
+
+    document.getElementById('btnAddRow').addEventListener('click',()=>{
+      emptyState.style.display='none'; docTable.style.display='table';
+      docBody.appendChild(crearFila(null)); renumerar();
+    });
+
+    // Precargar filas en modo actualizar/nueva_version
+    if(FILAS_PRECARGA.length > 0){
+      FILAS_PRECARGA.forEach(f=>docBody.appendChild(crearFila(f)));
+      emptyState.style.display='none';
+      docTable.style.display='table';
+      renumerar();
+      document.getElementById('btnFinalizar').classList.add('visible');
+
+      // Si hay datos BDD guardados, cargar los tabs automaticamente
+      if(BDD_PRECARGA && BDD_PRECARGA.sql){
+        SCHEMA    = BDD_PRECARGA.schema    || '';
+        TABLES    = BDD_PRECARGA.tables    || {};
+        SEQUENCES = BDD_PRECARGA.sequences || [];
+        document.getElementById('uploadZone').style.display = 'none';
+        document.getElementById('tabsPanel').classList.add('visible');
+        document.getElementById('sqlRaw').value = BDD_PRECARGA.sql;
+        renderTablasTab();
+        dibujarDiagrama();
+      } else {
+        // Sin datos SQL guardados: mostrar zona de carga con aviso
+        const hint = document.createElement('p');
+        hint.style.cssText='font-size:.8rem;color:#a78bfa;margin-top:8px;text-align:center;';
+        hint.innerHTML='<i class="bi bi-info-circle me-1"></i>Carga el .sql si quieres ver el diagrama y las tablas. No es obligatorio.';
+        document.getElementById('uploadZone').appendChild(hint);
+      }
+    }
+
+    // ── FINALIZAR ──
+    document.getElementById('btnFinalizar').addEventListener('click',()=>{
+
+      // Validar Tab Tablas: campo, tipo, nulo y descripcion obligatorios
+      const CAMPOS_REQUERIDOS = ['name','type','nullable','description'];
+      let hayErrores = false;
+
+      // Limpiar marcas previas
+      document.querySelectorAll('#tablasContent td.campo-error').forEach(td=>{
+        td.classList.remove('campo-error');
+        td.style.outline='';
+        td.style.background='';
+      });
+
+      if(Object.keys(TABLES).length > 0){
+        document.querySelectorAll('#tablasContent table[data-table] tbody tr').forEach(tr=>{
+          CAMPOS_REQUERIDOS.forEach(field=>{
+            const td = tr.querySelector(`td[data-field="${field}"]`);
+            if(td && !td.innerText.trim()){
+              td.classList.add('campo-error');
+              td.style.outline = '2px solid #ef4444';
+              td.style.background = '#fef2f2';
+              hayErrores = true;
+            }
+          });
+        });
+      }
+
+      if(hayErrores){
+        // Cambiar al tab de tablas para mostrar los errores
+        document.querySelectorAll('.tab-btn').forEach(b=>b.classList.remove('active'));
+        document.querySelectorAll('.tab-pane').forEach(p=>p.classList.remove('active'));
+        document.querySelector('.tab-btn[data-tab="tab-tablas"]').classList.add('active');
+        document.getElementById('tab-tablas').classList.add('active');
+        alert('Hay campos obligatorios sin completar en el Tab Tablas.\nLos campos marcados en rojo deben ser rellenados antes de finalizar.');
+        return;
+      }
+
+      const filas=[...docBody.querySelectorAll('tr')].map(tr=>{
+        const c=tr.querySelectorAll('td');
+        return {necesidad:c[3].innerText,lineamiento:c[4].innerText,mecanismo:c[5].innerText,observacion:c[7].innerText};
+      });
+      if(!filas.length){alert('No hay lineamientos para guardar.');return;}
+      const btn=document.getElementById('btnFinalizar');
+      btn.disabled=true; btn.innerHTML='<span class="spinner-border spinner-border-sm me-1"></span> Guardando...';
+      mostrarLoading('Guardando lineamiento y cerrando ticket en Znuny...');
+      fetch(FINALIZAR_URL,{method:'POST',headers:{'Content-Type':'application/json','X-CSRFToken':CSRF},
+        body:JSON.stringify({
+          filas, modo:MODO, ticket:TICKET_NV,
+          bdd_sql:       document.getElementById('sqlRaw').value || '',
+          bdd_schema:    SCHEMA,
+          bdd_tables:    TABLES,
+          bdd_sequences: SEQUENCES,
+        })})
+      .then(r=>r.json())
+      .then(data=>{ if(data.ok) window.location.href='/'; else{ocultarLoading();btn.disabled=false;alert('Error al guardar.');} })
+      .catch(()=>{ocultarLoading();btn.disabled=false;alert('Error de conexion.');});
+    });
+  </script>
+</body>
+</html>

@@ -1,0 +1,310 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Editar Solicitud - IESS</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
+  <style>
+    :root{--iess-verde:#006847;--verde-h:#00512f;--sidebar-width:260px;--topbar-h:56px;}
+    *{box-sizing:border-box;margin:0;padding:0;}
+    body{font-family:'Segoe UI',sans-serif;background:#f0f2f5;min-height:100vh;}
+    .topbar{position:fixed;top:0;left:0;right:0;height:var(--topbar-h);background:var(--iess-verde);display:flex;align-items:center;padding:0 20px;z-index:1000;box-shadow:0 2px 8px rgba(0,0,0,.18);}
+    .topbar-brand{color:#fff;font-size:1rem;font-weight:700;display:flex;align-items:center;gap:10px;text-decoration:none;}
+    .topbar-right{margin-left:auto;display:flex;align-items:center;gap:14px;}
+    .user-badge{background:rgba(255,255,255,.15);color:#fff;border-radius:20px;padding:3px 12px;font-size:.8rem;display:flex;align-items:center;gap:6px;}
+    .btn-logout{background:rgba(255,255,255,.15);border:1px solid rgba(255,255,255,.3);color:#fff;border-radius:7px;padding:4px 12px;font-size:.82rem;text-decoration:none;display:flex;align-items:center;gap:5px;}
+    .btn-logout:hover{background:rgba(255,255,255,.25);color:#fff;}
+    .sidebar{position:fixed;top:var(--topbar-h);left:0;bottom:0;width:var(--sidebar-width);background:#fff;border-right:1px solid #e5e9ee;display:flex;flex-direction:column;z-index:900;}
+    .sidebar-section{padding:20px 12px 8px;}
+    .sidebar-section-label{font-size:.7rem;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:#b0b8c1;padding:0 8px;margin-bottom:6px;}
+    .sidebar-nav-item{display:flex;align-items:center;gap:10px;padding:9px 14px;border-radius:8px;color:#4a5568;text-decoration:none;font-size:.9rem;transition:background .15s;margin-bottom:2px;}
+    .sidebar-nav-item:hover{background:#f0f7f4;color:var(--iess-verde);}
+    .sidebar-footer{margin-top:auto;padding:16px 12px;border-top:1px solid #eef1f4;font-size:.75rem;color:#b0b8c1;text-align:center;}
+    .main-content{margin-left:var(--sidebar-width);margin-top:var(--topbar-h);padding:32px 36px;}
+    .card-lin{background:#fff;border-radius:12px;box-shadow:0 2px 12px rgba(0,0,0,.06);overflow:hidden;margin-bottom:24px;}
+    .card-lin-header{background:var(--iess-verde);color:#fff;padding:16px 24px;display:flex;align-items:center;gap:10px;}
+    .card-lin-header h5{margin:0;font-weight:700;font-size:1rem;}
+    .ticket-badge{background:rgba(255,255,255,.2);border-radius:8px;padding:4px 12px;font-size:.88rem;font-family:monospace;font-weight:600;}
+    .detalle-existente{display:flex;align-items:center;gap:12px;padding:12px 16px;border-radius:8px;background:#f8fafc;border:1px solid #e2e8f0;margin-bottom:8px;}
+    .tipo-card{border:1.5px solid #e2e8f0;border-radius:10px;padding:16px 20px;margin-bottom:12px;transition:border-color .2s;}
+    .tipo-card.activo{border-color:var(--iess-verde);background:#f7fbf9;}
+    .tipo-card.creado{border-color:#22c55e;}
+    .tipo-card.error-borde{border-color:#ef4444;}
+    .tipo-header{display:flex;align-items:center;gap:12px;cursor:pointer;}
+    .tipo-header .form-check-input{width:1.2em;height:1.2em;margin-top:0;border-color:var(--iess-verde);cursor:pointer;}
+    .tipo-header .form-check-input:checked{background-color:var(--iess-verde);border-color:var(--iess-verde);}
+    .tipo-label{font-size:.97rem;font-weight:600;color:#1e293b;margin:0;}
+    .tipo-badge{font-size:.72rem;font-weight:700;padding:2px 10px;border-radius:20px;text-transform:uppercase;}
+    .tipo-body{margin-top:14px;display:none;}
+    .tipo-body.visible{display:block;}
+    .ticket-hijo-result{display:none;margin-top:10px;padding:10px 14px;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;font-size:.88rem;color:#166534;}
+    .ticket-hijo-result.visible{display:flex;align-items:center;gap:8px;}
+    .form-footer{padding:20px 24px;border-top:1px solid #f0f4f8;display:flex;justify-content:flex-end;gap:10px;}
+    .btn-guardar{background:var(--iess-verde);color:#fff;border:none;border-radius:8px;padding:10px 28px;font-size:.95rem;font-weight:600;cursor:pointer;}
+    .btn-guardar:hover{background:var(--verde-h);}
+    .btn-guardar:disabled{background:#94a3b8;cursor:not-allowed;}
+    .btn-cancelar{background:#f1f5f9;color:#475569;border:1px solid #e2e8f0;border-radius:8px;padding:10px 20px;font-size:.95rem;text-decoration:none;display:inline-flex;align-items:center;}
+    #loading-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:9999;flex-direction:column;align-items:center;justify-content:center;gap:16px;}
+    #loading-overlay .spinner-border{width:3rem;height:3rem;color:#fff;}
+    #loading-overlay p{color:#fff;font-size:1rem;font-weight:500;margin:0;}
+  </style>
+</head>
+<body>
+  <div id="loading-overlay">
+    <div class="spinner-border" role="status"></div>
+    <p id="loading-msg">Creando ticket hijo en Znuny...</p>
+    <small style="color:rgba(255,255,255,.7);font-size:.82rem;">Por favor espere, esto puede tardar hasta 2 minutos</small>
+  </div>
+
+  <nav class="topbar">
+    <a href="{% url 'home' %}" class="topbar-brand">
+      <i class="bi bi-shield-check-fill" style="font-size:1.2rem"></i> LINEAMIENTOS &mdash; SDNAS
+    </a>
+    <div class="topbar-right">
+      <div class="user-badge"><i class="bi bi-person-circle"></i>{{ request.user.get_full_name|default:request.user.username }}</div>
+      <a href="{% url 'logout' %}" class="btn-logout"><i class="bi bi-box-arrow-right"></i> Salir</a>
+    </div>
+  </nav>
+
+  <aside class="sidebar">
+    <div class="sidebar-section">
+      <div class="sidebar-section-label">Menu</div>
+      <a href="{% url 'home' %}" class="sidebar-nav-item"><i class="bi bi-house-door"></i> Inicio</a>
+    </div>
+    <div class="sidebar-footer">IESS &mdash; DNTI &copy; {% now "Y" %}</div>
+  </aside>
+
+  <main class="main-content">
+    {% if errores %}
+    <div class="alert alert-danger mb-3">
+      <strong><i class="bi bi-exclamation-triangle me-1"></i>Errores:</strong>
+      <ul class="mb-0 mt-1">{% for e in errores %}<li>{{ e }}</li>{% endfor %}</ul>
+    </div>
+    {% endif %}
+
+    <div class="card-lin">
+      <div class="card-lin-header">
+        <i class="bi bi-pencil-square" style="font-size:1.2rem"></i>
+        <h5>Editar Solicitud</h5>
+        <span class="ms-auto ticket-badge"><i class="bi bi-ticket-detailed me-1"></i>#{{ lin.ticket_principal }}</span>
+      </div>
+
+      <!-- Tipos existentes (readonly) -->
+      <div class="p-4 pb-0">
+        <p class="text-muted mb-3" style="font-size:.9rem;">
+          <i class="bi bi-info-circle me-1"></i>
+          Los tipos ya asignados no se pueden modificar. Solo puedes añadir nuevos tipos.
+        </p>
+        {% for d in detalles_existentes %}
+        <div class="detalle-existente">
+          <i class="bi bi-check-circle-fill text-success"></i>
+          <span class="badge" style="font-size:.78rem;{% if d.tipo == 'software' %}background:#eff6ff;color:#2563eb;{% elif d.tipo == 'bdd' %}background:#f5f3ff;color:#7c3aed;{% else %}background:#fffbeb;color:#d97706;{% endif %}">
+            {{ d.get_tipo_display }}
+          </span>
+          <span style="font-family:monospace;font-size:.85rem;color:#475569;">#{{ d.ticket_interno }}</span>
+          <span style="font-size:.85rem;color:#64748b;">{{ d.usuario_asignado.get_full_name|default:d.usuario_asignado.username }}</span>
+          <span class="ms-auto badge" style="background:{% if d.finalizado %}#dcfce7;color:#166534{% else %}#fef3c7;color:#92400e{% endif %};font-size:.72rem;">
+            {% if d.finalizado %}Finalizado{% else %}Pendiente{% endif %}
+          </span>
+          {% if not d.finalizado %}
+          <a href="{% url 'eliminar_detalle' d.pk %}"
+             class="btn btn-sm ms-2 btn-quitar-tipo"
+             style="background:#fef2f2;border:1px solid #fca5a5;color:#ef4444;border-radius:7px;padding:3px 10px;font-size:.75rem;">
+            <i class="bi bi-trash3 me-1"></i>Quitar
+          </a>
+          {% endif %}
+        </div>
+        {% endfor %}
+      </div>
+
+      <!-- Nuevos tipos -->
+      {% if tipos_disponibles %}
+      <form method="post" id="formEditar">
+        {% csrf_token %}
+        <div class="p-4">
+          {% if detalles_existentes %}<hr class="my-3">{% endif %}
+          <p class="fw-semibold mb-3" style="font-size:.9rem;color:#374151;">
+            <i class="bi bi-plus-circle me-1" style="color:var(--iess-verde);"></i>Añadir tipos de lineamiento:
+          </p>
+
+          {% for tipo in tipos_disponibles %}
+
+          {% if tipo == 'software' %}
+          <div class="tipo-card" id="card-{{ tipo }}">
+            <div class="tipo-header" onclick="document.getElementById('chk-{{ tipo }}').click()">
+              <input class="form-check-input chk-tipo" type="checkbox" id="chk-{{ tipo }}" data-tipo="{{ tipo }}" onclick="event.stopPropagation()">
+              <label class="tipo-label" for="chk-{{ tipo }}">Lineamiento de Software</label>
+              <span class="tipo-badge ms-auto" style="background:#eff6ff;color:#2563eb;">Software</span>
+            </div>
+            <div class="tipo-body" id="body-{{ tipo }}">
+              <label class="form-label fw-semibold mt-2 mb-1" style="font-size:.85rem;color:#475569;">Responsable de Software</label>
+              <select class="form-select select-usuario" id="select-usuario-{{ tipo }}" name="usuario_{{ tipo }}" data-tipo="{{ tipo }}" style="font-size:.9rem;">
+                <option value="">-- Seleccione un responsable --</option>
+                {% for u in usuarios_software %}<option value="{{ u.pk }}">{{ u.get_full_name|default:u.username }} ({{ u.username }})</option>{% endfor %}
+              </select>
+              <div id="status-{{ tipo }}" style="font-size:.87rem;min-height:20px;margin-top:6px;"></div>
+              <div class="ticket-hijo-result" id="result-{{ tipo }}"></div>
+              <input type="hidden" id="ticket-hijo-{{ tipo }}" name="ticket_hijo_{{ tipo }}" value="">
+            </div>
+          </div>
+          {% endif %}
+
+          {% if tipo == 'bdd' %}
+          <div class="tipo-card" id="card-{{ tipo }}">
+            <div class="tipo-header" onclick="document.getElementById('chk-{{ tipo }}').click()">
+              <input class="form-check-input chk-tipo" type="checkbox" id="chk-{{ tipo }}" data-tipo="{{ tipo }}" onclick="event.stopPropagation()">
+              <label class="tipo-label" for="chk-{{ tipo }}">Lineamiento de Base de Datos</label>
+              <span class="tipo-badge ms-auto" style="background:#f5f3ff;color:#7c3aed;">Base de Datos</span>
+            </div>
+            <div class="tipo-body" id="body-{{ tipo }}">
+              <label class="form-label fw-semibold mt-2 mb-1" style="font-size:.85rem;color:#475569;">Responsable de Base de Datos</label>
+              <select class="form-select select-usuario" id="select-usuario-{{ tipo }}" name="usuario_{{ tipo }}" data-tipo="{{ tipo }}" style="font-size:.9rem;">
+                <option value="">-- Seleccione un responsable --</option>
+                {% for u in usuarios_bdd %}<option value="{{ u.pk }}">{{ u.get_full_name|default:u.username }} ({{ u.username }})</option>{% endfor %}
+              </select>
+              <div id="status-{{ tipo }}" style="font-size:.87rem;min-height:20px;margin-top:6px;"></div>
+              <div class="ticket-hijo-result" id="result-{{ tipo }}"></div>
+              <input type="hidden" id="ticket-hijo-{{ tipo }}" name="ticket_hijo_{{ tipo }}" value="">
+            </div>
+          </div>
+          {% endif %}
+
+          {% if tipo == 'infraestructura' %}
+          <div class="tipo-card" id="card-{{ tipo }}">
+            <div class="tipo-header" onclick="document.getElementById('chk-{{ tipo }}').click()">
+              <input class="form-check-input chk-tipo" type="checkbox" id="chk-{{ tipo }}" data-tipo="{{ tipo }}" onclick="event.stopPropagation()">
+              <label class="tipo-label" for="chk-{{ tipo }}">Lineamiento de Capacidad</label>
+              <span class="tipo-badge ms-auto" style="background:#fffbeb;color:#d97706;">Capacidad</span>
+            </div>
+            <div class="tipo-body" id="body-{{ tipo }}">
+              <label class="form-label fw-semibold mt-2 mb-1" style="font-size:.85rem;color:#475569;">Responsable de Capacidad</label>
+              <select class="form-select select-usuario" id="select-usuario-{{ tipo }}" name="usuario_{{ tipo }}" data-tipo="{{ tipo }}" style="font-size:.9rem;">
+                <option value="">-- Seleccione un responsable --</option>
+                {% for u in usuarios_infraestructura %}<option value="{{ u.pk }}">{{ u.get_full_name|default:u.username }} ({{ u.username }})</option>{% endfor %}
+              </select>
+              <div id="status-{{ tipo }}" style="font-size:.87rem;min-height:20px;margin-top:6px;"></div>
+              <div class="ticket-hijo-result" id="result-{{ tipo }}"></div>
+              <input type="hidden" id="ticket-hijo-{{ tipo }}" name="ticket_hijo_{{ tipo }}" value="">
+            </div>
+          </div>
+          {% endif %}
+
+          {% endfor %}
+        </div>
+
+        <div class="form-footer">
+          <a href="{% url 'home' %}" class="btn-cancelar"><i class="bi bi-x-lg me-1"></i>Cancelar</a>
+          <button type="submit" class="btn-guardar" id="btnGuardar" disabled>
+            <i class="bi bi-save me-1"></i>Guardar Cambios
+          </button>
+        </div>
+      </form>
+
+      {% else %}
+      <div class="p-4 pt-3">
+        <div class="alert alert-info mb-0">
+          <i class="bi bi-info-circle me-2"></i>
+          Esta solicitud ya tiene los 3 tipos de lineamiento asignados.
+        </div>
+        <div class="form-footer px-0">
+          <a href="{% url 'home' %}" class="btn-cancelar"><i class="bi bi-arrow-left me-1"></i>Volver</a>
+        </div>
+      </div>
+      {% endif %}
+    </div>
+  </main>
+
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+  <script>
+    const CSRF           = '{{ csrf_token }}';
+    const CREAR_HIJO_URL = '{% url "crear_hijo" %}';
+    const TICKET_PADRE   = '{{ lin.ticket_principal }}';
+    const estado = { software: false, bdd: false, infraestructura: false };
+
+    function mostrarLoading(msg){ document.getElementById('loading-msg').textContent = msg || 'Creando ticket hijo...'; document.getElementById('loading-overlay').style.display='flex'; }
+    function ocultarLoading(){ document.getElementById('loading-overlay').style.display='none'; }
+
+    function marcarCreado(tipo, numeroHijo){
+      estado[tipo] = true;
+      document.getElementById(`ticket-hijo-${tipo}`).value = numeroHijo || 'creado';
+      const result = document.getElementById(`result-${tipo}`);
+      result.innerHTML = `<i class="bi bi-check-circle-fill text-success"></i><span>Ticket hijo ${numeroHijo ? `<strong>#${numeroHijo}</strong>` : 'creado'}</span>`;
+      result.classList.add('visible');
+      document.getElementById(`card-${tipo}`).classList.remove('error-borde');
+      document.getElementById(`card-${tipo}`).classList.add('creado');
+      document.getElementById(`status-${tipo}`).innerHTML = '';
+      actualizarBoton();
+    }
+
+    function marcarError(tipo, msg){
+      estado[tipo] = false;
+      document.getElementById(`ticket-hijo-${tipo}`).value = '';
+      document.getElementById(`result-${tipo}`).classList.remove('visible');
+      document.getElementById(`card-${tipo}`).classList.remove('creado');
+      document.getElementById(`card-${tipo}`).classList.add('error-borde');
+      document.getElementById(`status-${tipo}`).innerHTML =
+        `<span class="text-danger fw-semibold"><i class="bi bi-x-circle-fill me-1"></i>${msg}</span>`;
+      document.getElementById(`select-usuario-${tipo}`).value = '';
+      actualizarBoton();
+    }
+
+    function actualizarBoton(){
+      const checked = [...document.querySelectorAll('.chk-tipo:checked')];
+      document.getElementById('btnGuardar').disabled = !(checked.length > 0 && checked.every(c => estado[c.dataset.tipo]));
+    }
+
+    document.querySelectorAll('.chk-tipo').forEach(chk => {
+      chk.addEventListener('change', function(){
+        const tipo = this.dataset.tipo;
+        document.getElementById(`body-${tipo}`).classList.toggle('visible', this.checked);
+        document.getElementById(`card-${tipo}`).classList.toggle('activo', this.checked);
+        if (!this.checked){
+          estado[tipo] = false;
+          document.getElementById(`ticket-hijo-${tipo}`).value = '';
+          document.getElementById(`status-${tipo}`).innerHTML = '';
+          document.getElementById(`result-${tipo}`).classList.remove('visible');
+          document.getElementById(`select-usuario-${tipo}`).value = '';
+          document.getElementById(`card-${tipo}`).classList.remove('creado','error-borde');
+        }
+        actualizarBoton();
+      });
+    });
+
+    document.querySelectorAll('.btn-quitar-tipo').forEach(btn => {
+      btn.addEventListener('click', function(e){
+        e.preventDefault();
+        const url = this.href;
+        if(!confirm('\u00bfQuitar este tipo de lineamiento? Se cerrar\u00e1 el ticket en Znuny. Esta acci\u00f3n no se puede deshacer.')) return;
+        mostrarLoading('Cerrando ticket en Znuny...');
+        window.location.href = url;
+      });
+    });
+
+    document.querySelectorAll('.select-usuario').forEach(sel => {
+      sel.addEventListener('change', function(){
+        const tipo = this.dataset.tipo;
+        if (!this.value){ estado[tipo]=false; actualizarBoton(); return; }
+        this.disabled = true;
+        mostrarLoading(`Creando ticket hijo de ${tipo} en Znuny...`);
+        fetch(CREAR_HIJO_URL, {
+          method:'POST',
+          headers:{'Content-Type':'application/x-www-form-urlencoded','X-CSRFToken':CSRF},
+          body:[`ticket_padre=${encodeURIComponent(TICKET_PADRE)}`,`tipo=${encodeURIComponent(tipo)}`,`usuario_id=${encodeURIComponent(this.value)}`].join('&'),
+        })
+        .then(r=>r.json())
+        .then(data=>{ ocultarLoading(); this.disabled=false; if(data.creado) marcarCreado(tipo,data.numero_hijo||''); else marcarError(tipo,data.error||'Error'); })
+        .catch(()=>{ ocultarLoading(); this.disabled=false; marcarError(tipo,'Error de conexion'); });
+      });
+    });
+
+    document.getElementById('formEditar')?.addEventListener('submit', function(e){
+      const tipos=[...document.querySelectorAll('.chk-tipo:checked')].map(c=>c.dataset.tipo);
+      if(!tipos.length){e.preventDefault();return;}
+      tipos.forEach(t=>{ const i=document.createElement('input'); i.type='hidden'; i.name='tipos'; i.value=t; this.appendChild(i); });
+      mostrarLoading('Guardando cambios...');
+    });
+  </script>
+</body>
+</html>
