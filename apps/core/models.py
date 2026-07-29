@@ -28,6 +28,10 @@ class LineamientoDetalle(models.Model):
         settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True,
         related_name='lineamientos_asignados'
     )
+    diagrama_personalizado = models.ImageField(
+        upload_to='diagramas_bdd/', null=True, blank=True,
+        verbose_name='Diagrama ER personalizado',
+    )
 
     class Meta:
         verbose_name = 'Detalle de Lineamiento'; verbose_name_plural = 'Detalles de Lineamiento'

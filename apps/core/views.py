@@ -1,6 +1,7 @@
 import json
 import math
 import os
+import shutil
 import subprocess
 import re
 import tempfile
@@ -44,6 +45,25 @@ def _limpiar_ticket(valor):
     return re.sub(r'^ticket#', '', valor.strip(), flags=re.IGNORECASE)
 
 
+TIPO_ABREV  = {'software': 'SW', 'bdd': 'BDD', 'infraestructura': 'INF'}
+ORDEN_TIPOS = ['software', 'bdd', 'infraestructura']  # SW, BDD, INF
+
+
+def _nombre_pdf(ticket_padre, tipos=None, temporal=False):
+    """
+    Nomenclatura del PDF (SIEMPRE basada en el Ticket Padre, nunca en el hijo):
+    - final    -> PAS-MLT-{TicketPadre}.pdf
+    - temporal -> PAS-MLT-{TicketPadre}-{Tipos...}-TMP.pdf (tipos en orden SW, BDD, INF)
+    - temporal sin tipos finalizados aun -> PAS-MLT-{TicketPadre}-BORRADOR-TMP.pdf
+    """
+    if not temporal:
+        return f'PAS-MLT-{ticket_padre}.pdf'
+    tipos = tipos or []
+    abrevs = [TIPO_ABREV[t] for t in ORDEN_TIPOS if t in tipos]
+    sufijo = '-'.join(abrevs) if abrevs else 'BORRADOR'
+    return f'PAS-MLT-{ticket_padre}-{sufijo}-TMP.pdf'
+
+
 def _run_script(script, args):
     try:
         r = subprocess.run(
@@ -76,7 +96,7 @@ def _generar_pdf_lineamientos(lin, version_map, watermark=False, tipos_incluir=N
     from reportlab.lib.enums import TA_CENTER, TA_LEFT, TA_JUSTIFY
     from reportlab.platypus import (
         SimpleDocTemplate, Table, TableStyle, Paragraph,
-        Spacer, PageBreak, KeepTogether,
+        Spacer, PageBreak, KeepTogether, Image as RLImage,
     )
     from reportlab.graphics.shapes import Drawing, Rect, Line, String as RLString, Group
     from reportlab.graphics import renderPDF
@@ -348,64 +368,74 @@ def _generar_pdf_lineamientos(lin, version_map, watermark=False, tipos_incluir=N
             story.append(Paragraph('DIAGRAMA ENTIDAD-RELACIÓN', estilo('dr', fontName='Helvetica-Bold', fontSize=10, alignment=TA_CENTER, textColor=BDD_C)))
             story.append(Spacer(1, 4*mm))
 
-            # Dibujar diagrama con reportlab graphics
-            tnames   = list(tables.keys())
-            ncols    = max(1, math.ceil(math.sqrt(len(tnames))))
-            BOX_W    = 180; BOX_COL_H = 14; BOX_HDR = 20; GAP_X = 40; GAP_Y = 30
+            if bdd_detalle.diagrama_personalizado:
+                # Imagen personalizada subida por el usuario, escalada para que quepa en la pagina
+                AVAIL_W = PAGE_W - 2 * MARGIN
+                AVAIL_H = PAGE_H - 7 * cm
+                img = RLImage(bdd_detalle.diagrama_personalizado.path)
+                scale = min(AVAIL_W / img.imageWidth, AVAIL_H / img.imageHeight, 1.0)
+                img.drawWidth  = img.imageWidth * scale
+                img.drawHeight = img.imageHeight * scale
+                story.append(img)
+            else:
+                # Dibujar diagrama con reportlab graphics
+                tnames   = list(tables.keys())
+                ncols    = max(1, math.ceil(math.sqrt(len(tnames))))
+                BOX_W    = 180; BOX_COL_H = 14; BOX_HDR = 20; GAP_X = 40; GAP_Y = 30
 
-            # Calcular tamano natural del diagrama
-            nrows    = math.ceil(len(tnames) / ncols)
-            max_cols = max(len(tables[t]['columns']) for t in tnames)
-            D_W_NAT  = ncols * (BOX_W + GAP_X) + 20
-            D_H_NAT  = nrows * (BOX_HDR + max_cols * BOX_COL_H + GAP_Y) + 40
+                # Calcular tamano natural del diagrama
+                nrows    = math.ceil(len(tnames) / ncols)
+                max_cols = max(len(tables[t]['columns']) for t in tnames)
+                D_W_NAT  = ncols * (BOX_W + GAP_X) + 20
+                D_H_NAT  = nrows * (BOX_HDR + max_cols * BOX_COL_H + GAP_Y) + 40
 
-            # Espacio disponible en la pagina (descontando cabecera y titulo)
-            AVAIL_W  = PAGE_W - 2 * MARGIN
-            AVAIL_H  = PAGE_H - 7 * cm  # cabecera + titulo + margenes
+                # Espacio disponible en la pagina (descontando cabecera y titulo)
+                AVAIL_W  = PAGE_W - 2 * MARGIN
+                AVAIL_H  = PAGE_H - 7 * cm  # cabecera + titulo + margenes
 
-            # Factor de escala para que todo quepa, manteniendo proporciones
-            scale    = min(AVAIL_W / D_W_NAT, AVAIL_H / D_H_NAT, 1.0)
+                # Factor de escala para que todo quepa, manteniendo proporciones
+                scale    = min(AVAIL_W / D_W_NAT, AVAIL_H / D_H_NAT, 1.0)
 
-            D_W = D_W_NAT; D_H = D_H_NAT
-            drawing = Drawing(D_W_NAT * scale, D_H_NAT * scale)
-            drawing.transform = (scale, 0, 0, scale, 0, 0)  # escalar todo el contenido
-            positions = {}
+                D_W = D_W_NAT; D_H = D_H_NAT
+                drawing = Drawing(D_W_NAT * scale, D_H_NAT * scale)
+                drawing.transform = (scale, 0, 0, scale, 0, 0)  # escalar todo el contenido
+                positions = {}
 
-            for i, tname in enumerate(tnames):
-                col = i % ncols; row = i // ncols
-                tdata = tables[tname]
-                x = col * (BOX_W + GAP_X) + 10
-                y = D_H - row * (BOX_HDR + len(tdata['columns']) * BOX_COL_H + GAP_Y) - BOX_HDR - 10
-                h = BOX_HDR + len(tdata['columns']) * BOX_COL_H
-                positions[tname] = {'x': x, 'y': y - h + BOX_HDR, 'w': BOX_W, 'h': h}
+                for i, tname in enumerate(tnames):
+                    col = i % ncols; row = i // ncols
+                    tdata = tables[tname]
+                    x = col * (BOX_W + GAP_X) + 10
+                    y = D_H - row * (BOX_HDR + len(tdata['columns']) * BOX_COL_H + GAP_Y) - BOX_HDR - 10
+                    h = BOX_HDR + len(tdata['columns']) * BOX_COL_H
+                    positions[tname] = {'x': x, 'y': y - h + BOX_HDR, 'w': BOX_W, 'h': h}
 
-                # Caja principal
-                drawing.add(Rect(x, y - h + BOX_HDR, BOX_W, h, fillColor=colors.white, strokeColor=colors.HexColor('#7c3aed'), strokeWidth=1.2))
-                # Header
-                drawing.add(Rect(x, y, BOX_W, BOX_HDR, fillColor=BDD_C, strokeColor=BDD_C))
-                drawing.add(RLString(x + BOX_W/2, y + 6, tname,
-                    textAnchor='middle', fontSize=7, fillColor=colors.white, fontName='Helvetica-Bold'))
+                    # Caja principal
+                    drawing.add(Rect(x, y - h + BOX_HDR, BOX_W, h, fillColor=colors.white, strokeColor=colors.HexColor('#7c3aed'), strokeWidth=1.2))
+                    # Header
+                    drawing.add(Rect(x, y, BOX_W, BOX_HDR, fillColor=BDD_C, strokeColor=BDD_C))
+                    drawing.add(RLString(x + BOX_W/2, y + 6, tname,
+                        textAnchor='middle', fontSize=7, fillColor=colors.white, fontName='Helvetica-Bold'))
 
-                # Columnas — empiezan justo debajo del header
-                for ci, col_def in enumerate(tdata['columns']):
-                    cy = y - (ci + 1) * BOX_COL_H  # sin + BOX_HDR, eso las sube al header
-                    bg = colors.HexColor('#fef9ec') if col_def.get('pk') else colors.white
-                    drawing.add(Rect(x, cy, BOX_W, BOX_COL_H, fillColor=bg, strokeColor=colors.HexColor('#e2e8f0'), strokeWidth=0.5))
-                    pk_mark = 'PK ' if col_def.get('pk') else ''
-                    col_text = f"{pk_mark}{col_def['name']} : {col_def['type']}{('(' + col_def['size'] + ')') if col_def.get('size') else ''}"
-                    drawing.add(RLString(x + 5, cy + 4, col_text[:38],
-                        textAnchor='start', fontSize=6, fillColor=colors.HexColor('#374151'), fontName='Courier'))
+                    # Columnas — empiezan justo debajo del header
+                    for ci, col_def in enumerate(tdata['columns']):
+                        cy = y - (ci + 1) * BOX_COL_H  # sin + BOX_HDR, eso las sube al header
+                        bg = colors.HexColor('#fef9ec') if col_def.get('pk') else colors.white
+                        drawing.add(Rect(x, cy, BOX_W, BOX_COL_H, fillColor=bg, strokeColor=colors.HexColor('#e2e8f0'), strokeWidth=0.5))
+                        pk_mark = 'PK ' if col_def.get('pk') else ''
+                        col_text = f"{pk_mark}{col_def['name']} : {col_def['type']}{('(' + col_def['size'] + ')') if col_def.get('size') else ''}"
+                        drawing.add(RLString(x + 5, cy + 4, col_text[:38],
+                            textAnchor='start', fontSize=6, fillColor=colors.HexColor('#374151'), fontName='Courier'))
 
-            # Líneas FK
-            for tname, tdata in tables.items():
-                for fk in tdata.get('fks', []):
-                    src = positions.get(tname); dst = positions.get(fk.get('ref_table', ''))
-                    if src and dst:
-                        x1 = src['x'] + src['w']; y1 = src['y'] + src['h'] / 2
-                        x2 = dst['x'];             y2 = dst['y'] + dst['h'] / 2
-                        drawing.add(Line(x1, y1, x2, y2, strokeColor=BDD_C, strokeWidth=1))
+                # Líneas FK
+                for tname, tdata in tables.items():
+                    for fk in tdata.get('fks', []):
+                        src = positions.get(tname); dst = positions.get(fk.get('ref_table', ''))
+                        if src and dst:
+                            x1 = src['x'] + src['w']; y1 = src['y'] + src['h'] / 2
+                            x2 = dst['x'];             y2 = dst['y'] + dst['h'] / 2
+                            drawing.add(Line(x1, y1, x2, y2, strokeColor=BDD_C, strokeWidth=1))
 
-            story.append(drawing)
+                story.append(drawing)
 
             # ── HOJA TABLAS BDD ──
             story.append(PageBreak())
@@ -590,6 +620,7 @@ def generar_lineamiento_bdd_view(request, detalle_id):
         'modo': modo, 'ticket_nv': ticket_nv,
         'filas_precarga': filas_precarga,
         'bdd_precarga':   json.dumps(bdd_precarga),
+        'diagrama_personalizado_url': detalle.diagrama_personalizado.url if detalle.diagrama_personalizado else '',
     })
 
 
@@ -612,6 +643,26 @@ def cargar_sql_ajax(request, detalle_id):
         })
     except Exception as e:
         return JsonResponse({'ok': False, 'error': str(e)})
+
+
+@login_required
+@require_POST
+def diagrama_personalizado_ajax(request, detalle_id):
+    detalle = get_object_or_404(LineamientoDetalle, pk=detalle_id, usuario_asignado=request.user)
+    if request.POST.get('restaurar') == 'true':
+        if detalle.diagrama_personalizado:
+            detalle.diagrama_personalizado.delete(save=False)
+        detalle.diagrama_personalizado = None
+        detalle.save(update_fields=['diagrama_personalizado'])
+        return JsonResponse({'ok': True, 'url': None})
+    imagen = request.FILES.get('imagen')
+    if not imagen:
+        return JsonResponse({'ok': False, 'error': 'No se recibio la imagen'})
+    if detalle.diagrama_personalizado:
+        detalle.diagrama_personalizado.delete(save=False)
+    detalle.diagrama_personalizado = imagen
+    detalle.save(update_fields=['diagrama_personalizado'])
+    return JsonResponse({'ok': True, 'url': detalle.diagrama_personalizado.url})
 
 
 # ── LOGICA GUIDELINES ─────────────────────────────────────────────────────────
@@ -870,14 +921,16 @@ def finalizar_ajax(request, detalle_id):
             detalle.lineamiento, version_map_pdf,
             watermark=True, tipos_incluir=[detalle.tipo],
         )
-        tmp_path = None
+        nombre_pdf = _nombre_pdf(
+            detalle.lineamiento.ticket_principal,
+            tipos=[detalle.tipo], temporal=True,
+        )
+        tmp_dir = None
         try:
-            with tempfile.NamedTemporaryFile(
-                suffix='.pdf', prefix=f'temporal_{detalle.pk}_',
-                delete=False,
-            ) as tmp:
-                tmp.write(buf.read())
-                tmp_path = tmp.name
+            tmp_dir = tempfile.mkdtemp(prefix=f'pdf_{detalle.pk}_')
+            tmp_path = os.path.join(tmp_dir, nombre_pdf)
+            with open(tmp_path, 'wb') as f:
+                f.write(buf.read())
             resultado = _run_script(
                 ZNUNY_SCRIPT_CERRAR, [ticket_cierre, MENSAJE_FINALIZACION, tmp_path],
             )
@@ -887,11 +940,34 @@ def finalizar_ajax(request, detalle_id):
                     'error': resultado.get('error', 'No se pudo adjuntar el PDF y cerrar el ticket'),
                 })
         finally:
-            if tmp_path and os.path.exists(tmp_path):
-                os.remove(tmp_path)
+            if tmp_dir and os.path.exists(tmp_dir):
+                shutil.rmtree(tmp_dir, ignore_errors=True)
     elif modo == 'actualizar':
-        ticket_version = generado.ticket or detalle.ticket_interno
-        _run_script(ZNUNY_SCRIPT_NOTA, [ticket_version])
+        ticket_version  = generado.ticket or detalle.ticket_interno
+        version_map_pdf = {detalle.pk: generado.pk}
+        buf = _generar_pdf_lineamientos(
+            detalle.lineamiento, version_map_pdf,
+            watermark=True, tipos_incluir=[detalle.tipo],
+        )
+        nombre_pdf = _nombre_pdf(
+            detalle.lineamiento.ticket_principal,
+            tipos=[detalle.tipo], temporal=True,
+        )
+        tmp_dir = None
+        try:
+            tmp_dir = tempfile.mkdtemp(prefix=f'pdf_{detalle.pk}_')
+            tmp_path = os.path.join(tmp_dir, nombre_pdf)
+            with open(tmp_path, 'wb') as f:
+                f.write(buf.read())
+            resultado = _run_script(ZNUNY_SCRIPT_NOTA, [ticket_version, tmp_path])
+            if not resultado.get('creado'):
+                return JsonResponse({
+                    'ok': False,
+                    'error': resultado.get('error', 'No se pudo adjuntar el PDF a la nota'),
+                })
+        finally:
+            if tmp_dir and os.path.exists(tmp_dir):
+                shutil.rmtree(tmp_dir, ignore_errors=True)
     return JsonResponse({'ok': True, 'version': generado.version_display(), 'id': generado.pk})
 
 
@@ -928,9 +1004,15 @@ def descargar_pdf_solicitud(request, lineamiento_id):
         total       = len(detalles)
         finalizados = sum(1 for d in detalles if d.finalizado)
         progreso    = round(finalizados / total * 100) if total else 0
-        buf  = _generar_pdf_lineamientos(lin, version_map, watermark=(progreso < 100))
+        es_temporal = progreso < 100
+        buf  = _generar_pdf_lineamientos(lin, version_map, watermark=es_temporal)
         resp = HttpResponse(buf.read(), content_type='application/pdf')
-        resp['Content-Disposition'] = f'attachment; filename="PAS-MLT-{lin.ticket_principal}_lineamientos.pdf"'
+        if es_temporal:
+            tipos_finalizados = [d.tipo for d in detalles if d.finalizado]
+            nombre_pdf = _nombre_pdf(lin.ticket_principal, tipos=tipos_finalizados, temporal=True)
+        else:
+            nombre_pdf = _nombre_pdf(lin.ticket_principal, temporal=False)
+        resp['Content-Disposition'] = f'attachment; filename="{nombre_pdf}"'
         return resp
     except Exception as e:
         return HttpResponse(f'Error al generar PDF: {e}', status=500)

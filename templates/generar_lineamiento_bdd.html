@@ -159,11 +159,19 @@
               <button class="zoom-btn" id="btnZoomOut"><i class="bi bi-zoom-out"></i></button>
               <button class="zoom-btn" id="btnZoomReset"><i class="bi bi-arrows-fullscreen"></i> Reset</button>
               <span style="font-size:.75rem;color:#94a3b8;margin-left:8px;">Rueda del ratón para zoom · Arrastra los cuadros</span>
+              <div style="margin-left:auto;display:flex;align-items:center;gap:6px;">
+                <input type="file" id="inputDiagramaImg" accept="image/*" style="display:none;">
+                <button class="zoom-btn" id="btnSubirDiagrama"><i class="bi bi-image me-1"></i>Subir imagen propia</button>
+                <button class="zoom-btn" id="btnRestaurarDiagrama" style="display:none;color:#dc2626;border-color:#fecaca;">
+                  <i class="bi bi-arrow-counterclockwise me-1"></i>Restaurar Diagrama Automático
+                </button>
+              </div>
             </div>
             <div id="diagramaWrap">
               <div id="diagramaCanvas">
                 <svg class="fk-lines" id="fkSvg"></svg>
               </div>
+              <img id="diagramaImgPersonalizado" style="display:none;max-width:100%;max-height:100%;object-fit:contain;">
             </div>
           </div>
 
@@ -229,7 +237,9 @@
   <script>
     const CSRF          = '{{ csrf_token }}';
     const CARGAR_URL    = '{% url "cargar_sql" detalle.pk %}';
+    const DIAGRAMA_URL  = '{% url "diagrama_personalizado" detalle.pk %}';
     const FINALIZAR_URL = '{% url "finalizar_lineamiento" detalle.pk %}';
+    const DIAGRAMA_PERSONALIZADO_URL = '{{ diagrama_personalizado_url }}';
     const RESPONSABLE   = '{{ request.user.get_full_name|default:request.user.username }}';
     const HOY           = new Date().toLocaleDateString('es-EC',{day:'2-digit',month:'2-digit',year:'numeric'});
     const MODO          = '{{ modo }}';
@@ -441,6 +451,60 @@
         aplicarZoom();
       }
     },{passive:false});
+
+    // ── DIAGRAMA PERSONALIZADO (imagen subida por el usuario) ──
+    const imgDiagramaPersonalizado = document.getElementById('diagramaImgPersonalizado');
+    const btnSubirDiagrama    = document.getElementById('btnSubirDiagrama');
+    const btnRestaurarDiagrama = document.getElementById('btnRestaurarDiagrama');
+    const inputDiagramaImg    = document.getElementById('inputDiagramaImg');
+
+    function mostrarDiagramaPersonalizado(url){
+      imgDiagramaPersonalizado.src = url;
+      imgDiagramaPersonalizado.style.display = 'block';
+      canvas.style.display = 'none';
+      btnRestaurarDiagrama.style.display = 'inline-flex';
+    }
+    function ocultarDiagramaPersonalizado(){
+      imgDiagramaPersonalizado.style.display = 'none';
+      imgDiagramaPersonalizado.src = '';
+      canvas.style.display = '';
+      btnRestaurarDiagrama.style.display = 'none';
+    }
+
+    if(DIAGRAMA_PERSONALIZADO_URL){ mostrarDiagramaPersonalizado(DIAGRAMA_PERSONALIZADO_URL); }
+
+    btnSubirDiagrama.addEventListener('click', ()=> inputDiagramaImg.click());
+
+    inputDiagramaImg.addEventListener('change', ()=>{
+      const file = inputDiagramaImg.files[0];
+      if(!file) return;
+      // Previsualizacion inmediata
+      mostrarDiagramaPersonalizado(URL.createObjectURL(file));
+      // Persistir en el servidor
+      const fd = new FormData();
+      fd.append('imagen', file);
+      fetch(DIAGRAMA_URL, {method:'POST', headers:{'X-CSRFToken':CSRF}, body: fd})
+        .then(r=>r.json())
+        .then(data=>{
+          if(!data.ok){ alert('Error al guardar la imagen: '+(data.error||'desconocido')); return; }
+          mostrarDiagramaPersonalizado(data.url);
+        })
+        .catch(()=> alert('Error de conexion al guardar la imagen.'));
+    });
+
+    btnRestaurarDiagrama.addEventListener('click', ()=>{
+      if(!confirm('¿Restaurar el diagrama automático generado desde el SQL? Se eliminará la imagen personalizada.')) return;
+      const fd = new FormData();
+      fd.append('restaurar', 'true');
+      fetch(DIAGRAMA_URL, {method:'POST', headers:{'X-CSRFToken':CSRF}, body: fd})
+        .then(r=>r.json())
+        .then(data=>{
+          if(!data.ok){ alert('Error al restaurar: '+(data.error||'desconocido')); return; }
+          ocultarDiagramaPersonalizado();
+          inputDiagramaImg.value = '';
+        })
+        .catch(()=> alert('Error de conexion al restaurar.'));
+    });
 
     // ── DIAGRAMA ──
     let tablePositions={};

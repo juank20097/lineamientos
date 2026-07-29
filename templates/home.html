@@ -1,3 +1,4 @@
+{% load znuny_extras %}
 <!DOCTYPE html>
 <html lang="es">
 <head>
@@ -33,6 +34,9 @@
     #loading-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:9999;flex-direction:column;align-items:center;justify-content:center;gap:16px;}
     #loading-overlay .spinner-border{width:3rem;height:3rem;color:#fff;}
     #loading-overlay p{color:#fff;font-size:1rem;font-weight:500;margin:0;}
+    .ticket-link{color:inherit;text-decoration:none;cursor:pointer;}
+    .ticket-link:hover{color:var(--iess-verde);text-decoration:underline;}
+    .ticket-link i{font-size:.7em;margin-left:2px;vertical-align:middle;}
   </style>
 </head>
 <body>
@@ -104,13 +108,13 @@
             <tr>
               <th class="py-3 ps-4">Ticket Principal</th>
               <th>Tipo(s)</th><th>Ticket(s) Hijo</th><th>Responsable(s)</th>
-              <th>Fecha Asignado</th><th style="min-width:140px;">Progreso</th><th>Descargar</th><th>Editar</th>
+              <th>Fecha Asignado</th><th style="min-width:140px;">Progreso</th><th>Acciones</th>
             </tr>
           </thead>
           <tbody>
             {% for sol in solicitudes_asignadas %}
             <tr>
-              <td class="ps-4 py-3"><span class="fw-semibold" style="font-family:monospace;">#{{ sol.ticket_principal }}</span></td>
+              <td class="ps-4 py-3"><a href="{% ticket_url sol.ticket_principal %}" target="_blank" class="fw-semibold ticket-link" style="font-family:monospace;">#{{ sol.ticket_principal }}<i class="bi bi-box-arrow-up-right"></i></a></td>
               <td>{% for d in sol.detalles.all %}
                 <div class="d-flex align-items-center gap-1 mb-1">
                   {% if d.finalizado %}
@@ -122,7 +126,7 @@
                 </div>
               {% endfor %}</td>
               <td>{% for d in sol.detalles.all %}
-                <span class="d-block" style="font-family:monospace;font-size:.8rem;">#{{ d.ticket_interno }}</span>
+                <a href="{% ticket_url d.ticket_interno %}" target="_blank" class="d-block ticket-link" style="font-family:monospace;font-size:.8rem;">#{{ d.ticket_interno }}<i class="bi bi-box-arrow-up-right"></i></a>
               {% endfor %}</td>
               <td>{% for d in sol.detalles.all %}
                 <span class="d-block">{{ d.usuario_asignado.get_full_name|default:d.usuario_asignado.username }}</span>
@@ -136,14 +140,16 @@
                   <span class="pct-label" style="font-size:.72rem;font-weight:700;color:#475569;white-space:nowrap;">0%</span>
                 </div>
               </td>
-              <td class="td-descarga" data-sol="{{ sol.pk }}" data-url="{% url 'descargar_solicitud' sol.pk %}">
-                {# El boton aparece via JS cuando progreso > 0% #}
-              </td>
               <td>
-                <a href="{% url 'editar_solicitud' sol.pk %}" class="btn btn-sm fw-semibold"
-                  style="background:#fff;border:1.5px solid var(--iess-verde);color:var(--iess-verde);border-radius:7px;padding:4px 12px;font-size:.78rem;">
-                  <i class="bi bi-pencil-square me-1"></i>Editar
-                </a>
+                <div class="d-flex gap-2">
+                  <span class="td-descarga" data-sol="{{ sol.pk }}" data-url="{% url 'descargar_solicitud' sol.pk %}">
+                    {# El boton aparece via JS cuando progreso > 0% #}
+                  </span>
+                  <a href="{% url 'editar_solicitud' sol.pk %}" class="btn btn-sm fw-semibold"
+                    style="background:#fff;border:1.5px solid var(--iess-verde);color:var(--iess-verde);border-radius:7px;padding:4px 12px;font-size:.78rem;">
+                    <i class="bi bi-pencil-square me-1"></i>Editar
+                  </a>
+                </div>
               </td>
             </tr>
             {% endfor %}
@@ -176,7 +182,7 @@
           <tbody>
             {% for sol in solicitudes_atendidas %}
             <tr>
-              <td class="ps-4 py-3"><span class="fw-semibold" style="font-family:monospace;">#{{ sol.ticket_principal }}</span></td>
+              <td class="ps-4 py-3"><a href="{% ticket_url sol.ticket_principal %}" target="_blank" class="fw-semibold ticket-link" style="font-family:monospace;">#{{ sol.ticket_principal }}<i class="bi bi-box-arrow-up-right"></i></a></td>
               <td>{% for d in sol.detalles.all %}
                 <div class="d-flex align-items-center gap-2 mb-2">
                   <i class="bi bi-check-circle-fill" style="color:#16a34a;font-size:.8rem;flex-shrink:0;"></i>
@@ -195,7 +201,7 @@
                 </div>
               {% endfor %}</td>
               <td>{% for d in sol.detalles.all %}
-                <span class="d-block ticket-hijo-display" data-detalle="{{ d.pk }}" style="font-family:monospace;font-size:.8rem;">#{{ d.ticket_interno }}</span>
+                <a href="{% ticket_url d.ticket_interno %}" target="_blank" class="d-block ticket-link ticket-hijo-display" data-detalle="{{ d.pk }}" style="font-family:monospace;font-size:.8rem;">#{{ d.ticket_interno }}<i class="bi bi-box-arrow-up-right"></i></a>
               {% endfor %}</td>
               <td>{% for d in sol.detalles.all %}
                 <span class="d-block">{{ d.usuario_asignado.get_full_name|default:d.usuario_asignado.username }}</span>
@@ -254,9 +260,9 @@
           <tbody>
             {% for d in detalles_pendientes %}
             <tr>
-              <td class="ps-4 py-3"><span class="fw-semibold" style="font-family:monospace;">#{{ d.lineamiento.ticket_principal }}</span></td>
+              <td class="ps-4 py-3"><a href="{% ticket_url d.lineamiento.ticket_principal %}" target="_blank" class="fw-semibold ticket-link" style="font-family:monospace;">#{{ d.lineamiento.ticket_principal }}<i class="bi bi-box-arrow-up-right"></i></a></td>
               <td><span class="badge" style="font-size:.72rem;{% if d.tipo == 'software' %}background:#eff6ff;color:#2563eb;{% elif d.tipo == 'bdd' %}background:#f5f3ff;color:#7c3aed;{% else %}background:#fffbeb;color:#d97706;{% endif %}">{{ d.get_tipo_display }}</span></td>
-              <td style="font-family:monospace;font-size:.82rem;">#{{ d.ticket_interno }}</td>
+              <td><a href="{% ticket_url d.ticket_interno %}" target="_blank" class="ticket-link" style="font-family:monospace;font-size:.82rem;">#{{ d.ticket_interno }}<i class="bi bi-box-arrow-up-right"></i></a></td>
               <td style="color:#6b7280;">{{ d.lineamiento.fecha_creacion|date:"d/m/Y H:i" }}</td>
               <td>
                 <a href="{% url 'generar_lineamiento' d.pk %}" class="btn btn-sm fw-semibold text-white" style="background:var(--iess-verde);border:none;border-radius:7px;padding:5px 14px;font-size:.82rem;">
@@ -289,9 +295,9 @@
           <tbody>
             {% for d in detalles_atendidos %}
             <tr style="opacity:.88;">
-              <td class="ps-4 py-3"><span class="fw-semibold" style="font-family:monospace;">#{{ d.lineamiento.ticket_principal }}</span></td>
+              <td class="ps-4 py-3"><a href="{% ticket_url d.lineamiento.ticket_principal %}" target="_blank" class="fw-semibold ticket-link" style="font-family:monospace;">#{{ d.lineamiento.ticket_principal }}<i class="bi bi-box-arrow-up-right"></i></a></td>
               <td><span class="badge" style="font-size:.72rem;{% if d.tipo == 'software' %}background:#eff6ff;color:#2563eb;{% elif d.tipo == 'bdd' %}background:#f5f3ff;color:#7c3aed;{% else %}background:#fffbeb;color:#d97706;{% endif %}">{{ d.get_tipo_display }}</span></td>
-              <td style="font-family:monospace;font-size:.82rem;">#{{ d.ticket_interno }}</td>
+              <td><a href="{% ticket_url d.ticket_interno %}" target="_blank" class="ticket-link" style="font-family:monospace;font-size:.82rem;">#{{ d.ticket_interno }}<i class="bi bi-box-arrow-up-right"></i></a></td>
               <td style="color:#6b7280;">{{ d.lineamiento.fecha_creacion|date:"d/m/Y H:i" }}</td>
               <td>
                 <div class="d-flex align-items-center gap-2">
@@ -441,6 +447,7 @@
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
   <script>
     const CSRF = '{{ csrf_token }}';
+    function znunyUrl(numero){ return `{% ticket_url "___" %}`.replace('___', numero); }
     function mostrarLoading(){ document.getElementById('loading-overlay').style.display='flex'; }
     function ocultarLoading(){ document.getElementById('loading-overlay').style.display='none'; }
 
@@ -522,8 +529,11 @@
         const opcion    = sel.options[sel.selectedIndex];
         const ticket    = opcion ? (opcion.dataset.ticket || '') : '';
         const row  = sel.closest('tr');
-        const span = row ? row.querySelector(`.ticket-hijo-display[data-detalle="${detallePk}"]`) : null;
-        if (span && ticket) span.textContent = `#${ticket}`;
+        const link = row ? row.querySelector(`.ticket-hijo-display[data-detalle="${detallePk}"]`) : null;
+        if (link && ticket) {
+          link.href = znunyUrl(ticket);
+          link.innerHTML = `#${ticket}<i class="bi bi-box-arrow-up-right"></i>`;
+        }
       }
       sel.addEventListener('change', actualizarTicket);
       actualizarTicket(); // sincronizar al cargar la pagina

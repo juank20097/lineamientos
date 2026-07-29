@@ -78,6 +78,9 @@ STATIC_URL = '/static/'
 STATICFILES_DIRS = [BASE_DIR / 'static']
 STATIC_ROOT = BASE_DIR / 'staticfiles'
 
+MEDIA_URL = '/media/'
+MEDIA_ROOT = BASE_DIR / 'media'
+
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 # Auth
@@ -87,6 +90,9 @@ LOGOUT_REDIRECT_URL = '/'
 
 # Playwright
 ZNUNY_PYTHON = config('ZNUNY_PYTHON', default='python')
+
+# Znuny (enlaces directos a tickets)
+ZNUNY_URL_BASE = config('ZNUNY_URL_BASE', default='https://soporte.iess.gob.ec/otrs')
 
 # Messages
 from django.contrib.messages import constants as messages_constants
