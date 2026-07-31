@@ -424,6 +424,7 @@
       .then(r=>r.json())
       .then(data=>{
         if(data.ok) window.location.href='/home/';
+        else if(data.bloqueado){ alert(data.error); window.location.href='/home/'; }
         else{ ocultarLoading(); btn.disabled=false; btn.innerHTML='<i class="bi bi-check2-circle"></i> Finalizar'; alert('Error al guardar: '+(data.error||'desconocido')); }
       })
       .catch(()=>{ ocultarLoading(); btn.disabled=false; btn.innerHTML='<i class="bi bi-check2-circle"></i> Finalizar'; alert('Error de conexion.'); });

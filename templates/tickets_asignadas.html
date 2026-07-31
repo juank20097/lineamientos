@@ -1,0 +1,349 @@
+{% load znuny_extras %}
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Solicitudes Asignadas - IESS</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
+  <style>
+    :root { --iess-verde:#006847; --iess-verde-hover:#00512f; --sidebar-width:260px; --topbar-h:56px; }
+    *{box-sizing:border-box;margin:0;padding:0;}
+    body{font-family:'Segoe UI',sans-serif;background:#f0f2f5;min-height:100vh;}
+    .topbar{position:fixed;top:0;left:0;right:0;height:var(--topbar-h);background:var(--iess-verde);display:flex;align-items:center;padding:0 20px;z-index:1000;box-shadow:0 2px 8px rgba(0,0,0,.18);}
+    .topbar-brand{color:#fff;font-size:1.05rem;font-weight:700;letter-spacing:.5px;display:flex;align-items:center;gap:10px;text-decoration:none;}
+    .topbar-right{margin-left:auto;display:flex;align-items:center;gap:16px;}
+    .user-badge{background:rgba(255,255,255,.15);color:#fff;border-radius:20px;padding:4px 14px;font-size:.82rem;display:flex;align-items:center;gap:6px;}
+    .rol-chip{background:rgba(255,255,255,.2);border-radius:10px;padding:2px 8px;font-size:.74rem;text-transform:uppercase;letter-spacing:.5px;}
+    .btn-logout{background:rgba(255,255,255,.15);border:1px solid rgba(255,255,255,.3);color:#fff;border-radius:8px;padding:5px 14px;font-size:.84rem;cursor:pointer;text-decoration:none;display:flex;align-items:center;gap:6px;transition:background .2s;}
+    .btn-logout:hover{background:rgba(255,255,255,.25);color:#fff;}
+    .sidebar{position:fixed;top:var(--topbar-h);left:0;bottom:0;width:var(--sidebar-width);background:#fff;border-right:1px solid #e5e9ee;display:flex;flex-direction:column;z-index:900;box-shadow:2px 0 8px rgba(0,0,0,.04);}
+    .sidebar-section{padding:20px 12px 8px;}
+    .sidebar-section-label{font-size:.7rem;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:#b0b8c1;padding:0 8px;margin-bottom:6px;}
+    .sidebar-btn{display:flex;align-items:center;gap:10px;width:100%;padding:11px 14px;border:none;border-radius:8px;background:var(--iess-verde);color:#fff;font-size:.92rem;font-weight:600;cursor:pointer;text-decoration:none;transition:background .18s,transform .1s;margin-bottom:4px;}
+    .sidebar-btn:hover{background:var(--iess-verde-hover);color:#fff;transform:translateX(2px);}
+    .sidebar-nav-item{display:flex;align-items:center;gap:10px;padding:9px 14px;border-radius:8px;color:#4a5568;text-decoration:none;font-size:.9rem;transition:background .15s,color .15s;margin-bottom:2px;}
+    .sidebar-nav-item:hover{background:#f0f7f4;color:var(--iess-verde);}
+    .sidebar-nav-item.active{background:#e6f2ed;color:var(--iess-verde);font-weight:600;}
+    .sidebar-footer{margin-top:auto;padding:16px 12px;border-top:1px solid #eef1f4;font-size:.75rem;color:#b0b8c1;text-align:center;}
+    .main-content{margin-left:var(--sidebar-width);margin-top:var(--topbar-h);padding:32px 36px;min-height:calc(100vh - var(--topbar-h));}
+    #loading-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:9999;flex-direction:column;align-items:center;justify-content:center;gap:16px;}
+    #loading-overlay .spinner-border{width:3rem;height:3rem;color:#fff;}
+    #loading-overlay p{color:#fff;font-size:1rem;font-weight:500;margin:0;}
+    .ticket-link{color:inherit;text-decoration:none;cursor:pointer;}
+    .ticket-link:hover{color:var(--iess-verde);text-decoration:underline;}
+    .ticket-link i{font-size:.7em;margin-left:2px;vertical-align:middle;}
+    .buscador-wrap{display:flex;gap:8px;margin-bottom:16px;max-width:420px;}
+    .buscador-wrap input{border:1.5px solid #e2e8f0;border-radius:8px;padding:7px 12px;font-size:.85rem;flex:1;outline:none;transition:border .15s;}
+    .buscador-wrap input:focus{border-color:var(--iess-verde);}
+    .buscador-wrap button{background:var(--iess-verde);color:#fff;border:none;border-radius:8px;padding:7px 14px;font-size:.85rem;cursor:pointer;}
+    tr.fila-oculta{display:none;}
+  </style>
+</head>
+<body>
+
+  <div id="loading-overlay">
+    <div class="spinner-border" role="status"></div>
+    <p>Verificando ticket en Znuny, por favor espere...</p>
+  </div>
+
+  <nav class="topbar">
+    <a href="{% url 'home' %}" class="topbar-brand">
+      <i class="bi bi-shield-check-fill" style="font-size:1.3rem"></i> LINEAMIENTOS &mdash; SDNAS
+    </a>
+    <div class="topbar-right">
+      <div class="user-badge">
+        <i class="bi bi-person-circle"></i>
+        {{ request.user.get_full_name|default:request.user.username }}
+        <span class="rol-chip">{{ request.user.get_rol_display }}</span>
+      </div>
+      <a href="{% url 'logout' %}" class="btn-logout"><i class="bi bi-box-arrow-right"></i> Salir</a>
+    </div>
+  </nav>
+
+  {% include '_sidebar.html' with seccion_activa='asignadas' %}
+
+  <main class="main-content">
+    {% if messages %}
+      {% for msg in messages %}
+        <div class="alert alert-{{ msg.tags }} alert-dismissible fade show mb-3" role="alert">
+          {{ msg }}<button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        </div>
+      {% endfor %}
+    {% endif %}
+
+    <h6 class="fw-bold mb-3" style="color:#374151;">
+      <i class="bi bi-list-task me-2" style="color:var(--iess-verde);"></i>
+      Solicitudes Asignadas
+      {% if solicitudes_asignadas %}<span class="badge ms-1" style="background:var(--iess-verde);font-size:.75rem;">{{ solicitudes_asignadas|length }}</span>{% endif %}
+    </h6>
+
+    {% if solicitudes_asignadas %}
+    <div class="buscador-wrap">
+      <input type="text" id="buscadorAsignadas" placeholder="Buscar por ticket, tipo o responsable...">
+      <button type="button" id="btnLimpiarBuscador"><i class="bi bi-x-lg"></i></button>
+    </div>
+    <div class="table-responsive" style="border-radius:10px;overflow:hidden;box-shadow:0 2px 12px rgba(0,0,0,.06);">
+      <table class="table table-hover mb-0" id="tablaAsignadas" style="background:#fff;font-size:.88rem;">
+        <thead style="background:var(--iess-verde);color:#fff;">
+          <tr>
+            <th class="py-3 ps-4">Ticket Principal</th>
+            <th>Tipo(s)</th><th>Ticket(s) Hijo</th><th>Responsable(s)</th>
+            <th>Fecha Asignado</th><th style="min-width:140px;">Progreso</th><th>Acciones</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for sol in solicitudes_asignadas %}
+          <tr>
+            <td class="ps-4 py-3"><a href="{% ticket_url sol.ticket_principal %}" target="_blank" class="fw-semibold ticket-link" style="font-family:monospace;">#{{ sol.ticket_principal }}<i class="bi bi-box-arrow-up-right"></i></a></td>
+            <td>{% for d in sol.detalles.all %}
+              <div class="d-flex align-items-center gap-1 mb-1">
+                {% if d.finalizado %}
+                  <i class="bi bi-check-circle-fill" style="color:#16a34a;font-size:.8rem;"></i>
+                {% else %}
+                  <i class="bi bi-circle" style="color:#d1d5db;font-size:.8rem;"></i>
+                {% endif %}
+                <span class="badge" style="font-size:.72rem;{% if d.tipo == 'software' %}background:#eff6ff;color:#2563eb;{% elif d.tipo == 'bdd' %}background:#f5f3ff;color:#7c3aed;{% else %}background:#fffbeb;color:#d97706;{% endif %}">{{ d.get_tipo_display }}</span>
+              </div>
+            {% endfor %}</td>
+            <td>{% for d in sol.detalles.all %}
+              <a href="{% ticket_url d.ticket_interno %}" target="_blank" class="d-block ticket-link" style="font-family:monospace;font-size:.8rem;">#{{ d.ticket_interno }}<i class="bi bi-box-arrow-up-right"></i></a>
+            {% endfor %}</td>
+            <td>{% for d in sol.detalles.all %}
+              <span class="d-block">{{ d.usuario_asignado.get_full_name|default:d.usuario_asignado.username }}</span>
+            {% endfor %}</td>
+            <td style="color:#6b7280;">{{ sol.fecha_creacion|date:"d/m/Y" }}</td>
+            <td class="td-progreso" data-sol="{{ sol.pk }}" style="min-width:140px;">
+              <div style="display:flex;align-items:center;gap:8px;">
+                <div style="flex:1;background:#e5e7eb;border-radius:20px;height:8px;overflow:hidden;">
+                  <div class="barra-progreso" style="height:100%;border-radius:20px;transition:width .5s;width:0%;background:#006847;"></div>
+                </div>
+                <span class="pct-label" style="font-size:.72rem;font-weight:700;color:#475569;white-space:nowrap;">0%</span>
+              </div>
+            </td>
+            <td>
+              <div class="d-flex gap-2">
+                <span class="td-descarga" data-sol="{{ sol.pk }}" data-url="{% url 'descargar_solicitud' sol.pk %}">
+                  {# El boton aparece via JS cuando progreso > 0% #}
+                </span>
+                <a href="{% url 'editar_solicitud' sol.pk %}" class="btn btn-sm fw-semibold"
+                  style="background:#fff;border:1.5px solid var(--iess-verde);color:var(--iess-verde);border-radius:7px;padding:4px 12px;font-size:.78rem;">
+                  <i class="bi bi-pencil-square me-1"></i>Editar
+                </a>
+              </div>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% else %}
+    <div style="background:#fff;border-radius:10px;padding:24px;text-align:center;box-shadow:0 2px 12px rgba(0,0,0,.06);color:#9ca3af;">
+      <i class="bi bi-inbox" style="font-size:2rem;"></i>
+      <p class="mt-2 mb-0" style="font-size:.9rem;">No tienes solicitudes asignadas.</p>
+    </div>
+    {% endif %}
+  </main>
+
+  <!-- MODAL TICKET PRINCIPAL -->
+  <div class="modal fade" id="modalTicketPrincipal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+      <div class="modal-content" style="border-radius:12px;overflow:hidden;">
+        <div class="modal-header" style="background:var(--iess-verde);color:#fff;border:none;">
+          <h5 class="modal-title"><i class="bi bi-ticket-detailed me-2"></i>Crear Lineamiento</h5>
+          <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body p-4">
+
+          <div id="pasoAutoTicketPrincipal">
+            <p class="text-muted mb-3" style="font-size:.88rem;">Ingrese el numero del ticket principal que agrupa este lineamiento.</p>
+            <label class="form-label fw-semibold" for="inputTicketPrincipal">Numero de Ticket</label>
+            <input type="text" id="inputTicketPrincipal" class="form-control"
+              placeholder="Ej: Ticket#2026... o solo el numero" autocomplete="off">
+            <div id="msgTicketPrincipal" style="font-size:.87rem;min-height:22px;margin-top:8px;"></div>
+          </div>
+
+          <!-- FALLBACK MANUAL: se activa si Znuny no responde a tiempo, da error, o no encuentra el ticket -->
+          <div id="pasoManualTicketPrincipal" style="display:none;">
+            <div class="alert alert-warning" style="font-size:.85rem;">
+              <i class="bi bi-exclamation-triangle-fill me-1"></i>
+              No se pudo conectar con Znuny automáticamente. Por favor, ingrese los datos del ticket manualmente para continuar.
+            </div>
+            <label class="form-label fw-semibold" for="manualNumeroTicket">Número de Ticket</label>
+            <input type="text" id="manualNumeroTicket" class="form-control mb-2"
+              placeholder="Ej: Ticket#2026... o solo el numero" autocomplete="off">
+            <label class="form-label fw-semibold" for="manualAsuntoTicket">Asunto / Título del ticket</label>
+            <input type="text" id="manualAsuntoTicket" class="form-control mb-2" autocomplete="off">
+            <label class="form-label fw-semibold" for="manualSolicitanteTicket">Solicitante</label>
+            <input type="text" id="manualSolicitanteTicket" class="form-control mb-2" autocomplete="off">
+            <label class="form-label fw-semibold" for="manualDescripcionTicket">Descripción breve (opcional)</label>
+            <textarea id="manualDescripcionTicket" class="form-control mb-2" rows="2"></textarea>
+            <div id="msgManualTicketPrincipal" style="font-size:.87rem;min-height:22px;"></div>
+            <button type="button" id="btnReintentarAutoTicket" class="btn btn-link p-0" style="font-size:.82rem;">
+              <i class="bi bi-arrow-clockwise me-1"></i>Reintentar búsqueda automática
+            </button>
+          </div>
+
+        </div>
+        <div class="modal-footer border-0 pt-0 px-4 pb-4">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+          <button type="button" id="btnVerificarTicket" class="btn fw-semibold text-white px-4"
+            style="background:var(--iess-verde);">
+            <i class="bi bi-search me-1"></i> Verificar y Continuar
+          </button>
+          <button type="button" id="btnContinuarManualTicket" class="btn fw-semibold text-white px-4" style="display:none;background:#d97706;">
+            <i class="bi bi-arrow-right-circle me-1"></i> Continuar Creación
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+  <script>
+    const CSRF = '{{ csrf_token }}';
+    function mostrarLoading(){ document.getElementById('loading-overlay').style.display='flex'; }
+    function ocultarLoading(){ document.getElementById('loading-overlay').style.display='none'; }
+
+    const ZNUNY_TIMEOUT_MS = 30000; // si Znuny no responde en 30s, se cancela la espera y se activa el fallback manual
+
+    function mostrarPasoAutoTicket(){
+      document.getElementById('pasoAutoTicketPrincipal').style.display = 'block';
+      document.getElementById('pasoManualTicketPrincipal').style.display = 'none';
+      document.getElementById('btnVerificarTicket').style.display = 'inline-block';
+      document.getElementById('btnContinuarManualTicket').style.display = 'none';
+    }
+
+    function mostrarPasoManualTicket(numeroPrellenado){
+      document.getElementById('pasoAutoTicketPrincipal').style.display = 'none';
+      document.getElementById('pasoManualTicketPrincipal').style.display = 'block';
+      document.getElementById('btnVerificarTicket').style.display = 'none';
+      document.getElementById('btnContinuarManualTicket').style.display = 'inline-block';
+      document.getElementById('manualNumeroTicket').value = numeroPrellenado || '';
+      document.getElementById('msgManualTicketPrincipal').innerHTML = '';
+    }
+
+    document.getElementById('btnCrearLineamiento')?.addEventListener('click', () => {
+      document.getElementById('inputTicketPrincipal').value = '';
+      document.getElementById('msgTicketPrincipal').innerHTML = '';
+      document.getElementById('btnVerificarTicket').disabled = false;
+      document.getElementById('btnVerificarTicket').innerHTML = '<i class="bi bi-search me-1"></i> Verificar y Continuar';
+      mostrarPasoAutoTicket();
+      new bootstrap.Modal(document.getElementById('modalTicketPrincipal')).show();
+    });
+
+    document.getElementById('btnReintentarAutoTicket')?.addEventListener('click', () => {
+      mostrarPasoAutoTicket();
+    });
+
+    function verificarTicketPrincipal(){
+      const input  = document.getElementById('inputTicketPrincipal');
+      const msg    = document.getElementById('msgTicketPrincipal');
+      const btn    = document.getElementById('btnVerificarTicket');
+      const numero = input.value.replace(/^ticket#/i,'').trim();
+      if (!numero){ msg.innerHTML='<span class="text-danger">Ingrese un numero de ticket.</span>'; return; }
+      btn.disabled = true;
+      btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span> Verificando...';
+      mostrarLoading();
+
+      const controller = new AbortController();
+      const timeoutId  = setTimeout(() => controller.abort(), ZNUNY_TIMEOUT_MS);
+
+      fetch('{% url "validar_ticket" %}',{
+        method:'POST',
+        headers:{'Content-Type':'application/x-www-form-urlencoded','X-CSRFToken':CSRF},
+        body:`numero=${encodeURIComponent(numero)}`,
+        signal: controller.signal,
+      })
+      .then(r=>r.json())
+      .then(data=>{
+        clearTimeout(timeoutId);
+        ocultarLoading();
+        btn.disabled=false;
+        btn.innerHTML='<i class="bi bi-search me-1"></i> Verificar y Continuar';
+        if(data.existe){
+          bootstrap.Modal.getInstance(document.getElementById('modalTicketPrincipal')).hide();
+          window.location.href=`{% url 'crear_lineamiento' %}?ticket=${encodeURIComponent(data.numero)}`;
+        } else {
+          // Znuny respondio pero no encontro el ticket (sin error de red): tambien se ofrece el fallback manual.
+          mostrarPasoManualTicket(numero);
+        }
+      })
+      .catch(()=>{
+        // Timeout (AbortController) o error de conexion/HTTP: activar modo manual inmediatamente.
+        clearTimeout(timeoutId);
+        ocultarLoading();
+        btn.disabled=false;
+        btn.innerHTML='<i class="bi bi-search me-1"></i> Verificar y Continuar';
+        mostrarPasoManualTicket(numero);
+      });
+    }
+    document.getElementById('btnVerificarTicket')?.addEventListener('click', verificarTicketPrincipal);
+    document.getElementById('inputTicketPrincipal')?.addEventListener('keydown', e=>{ if(e.key==='Enter') verificarTicketPrincipal(); });
+
+    // ── CONTINUAR CON DATOS MANUALES (fallback) ──
+    document.getElementById('btnContinuarManualTicket')?.addEventListener('click', () => {
+      const msg     = document.getElementById('msgManualTicketPrincipal');
+      const numero  = document.getElementById('manualNumeroTicket').value.replace(/^ticket#/i,'').trim();
+      const asunto  = document.getElementById('manualAsuntoTicket').value.trim();
+      const solicitante = document.getElementById('manualSolicitanteTicket').value.trim();
+      if (!numero){ msg.innerHTML = '<span class="text-danger">Ingrese el número de ticket.</span>'; return; }
+      if (!asunto){ msg.innerHTML = '<span class="text-danger">Ingrese el asunto del ticket.</span>'; return; }
+      if (!solicitante){ msg.innerHTML = '<span class="text-danger">Ingrese el solicitante.</span>'; return; }
+      // La verificacion automatica fue omitida: se continua igual que si Znuny
+      // hubiera confirmado el ticket, sin bloquear el flujo por su indisponibilidad.
+      bootstrap.Modal.getInstance(document.getElementById('modalTicketPrincipal')).hide();
+      window.location.href = `{% url 'crear_lineamiento' %}?ticket=${encodeURIComponent(numero)}&verificacion_manual=1`;
+    });
+
+    // ── BARRAS DE PROGRESO + BOTON DESCARGAR ──
+    (function(){
+      const PROGRESO = JSON.parse('{{ progreso_json|escapejs }}' || '{}');
+      document.querySelectorAll('.td-progreso').forEach(td => {
+        const solPk = parseInt(td.dataset.sol);
+        const pct   = PROGRESO[solPk] ?? 0;
+        const barra = td.querySelector('.barra-progreso');
+        const label = td.querySelector('.pct-label');
+        barra.style.background = pct===100 ? '#16a34a' : pct===0 ? '#d1d5db' : '#006847';
+        barra.style.width  = pct + '%';
+        label.textContent  = pct + '%';
+        label.style.color  = pct===100 ? '#16a34a' : '#475569';
+      });
+      document.querySelectorAll('.td-descarga').forEach(td => {
+        const solPk = parseInt(td.dataset.sol);
+        const pct   = PROGRESO[solPk] ?? 0;
+        if (pct > 0) {
+          td.innerHTML = `<a href="${td.dataset.url}"
+            class="btn btn-sm fw-semibold text-white"
+            style="background:#dc2626;border:none;border-radius:7px;padding:5px 12px;font-size:.8rem;">
+            <i class="bi bi-file-earmark-pdf-fill me-1"></i>PDF
+          </a>`;
+        }
+      });
+    })();
+
+    // ── BUSCADOR LOCAL ──
+    (function(){
+      const input = document.getElementById('buscadorAsignadas');
+      const tabla = document.getElementById('tablaAsignadas');
+      if (!input || !tabla) return;
+      const filas = tabla.querySelectorAll('tbody tr');
+      function filtrar(){
+        const q = input.value.trim().toLowerCase();
+        filas.forEach(fila => {
+          const texto = fila.innerText.toLowerCase();
+          fila.classList.toggle('fila-oculta', q !== '' && !texto.includes(q));
+        });
+      }
+      input.addEventListener('input', filtrar);
+      document.getElementById('btnLimpiarBuscador')?.addEventListener('click', () => {
+        input.value = '';
+        filtrar();
+        input.focus();
+      });
+    })();
+  </script>
+
+</body>
+</html>

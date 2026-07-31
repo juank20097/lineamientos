@@ -94,6 +94,21 @@ ZNUNY_PYTHON = config('ZNUNY_PYTHON', default='python')
 # Znuny (enlaces directos a tickets)
 ZNUNY_URL_BASE = config('ZNUNY_URL_BASE', default='https://soporte.iess.gob.ec/otrs')
 
+# FirmaEC - Web Service de Firma Electronica (IESS)
+FIRMA_EC_URL = config('FIRMA_EC_URL', default='http://192.168.114.216:8090/api/iess/firmaec/firmar')
+FIRMA_EC_ENLACES_URL = config('FIRMA_EC_ENLACES_URL', default='http://192.168.114.216:8090/api/iess/firmaec/enlaces')
+FIRMA_EC_CLAVE_PUBLICA_URL = config('FIRMA_EC_CLAVE_PUBLICA_URL', default='http://192.168.114.216:8090/api/iess/seguridad/clave-publica')
+
+# Email (notificacion de firma de autoridad pendiente)
+EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
+EMAIL_HOST = config('EMAIL_HOST', default='mail.iess.gob.ec')
+EMAIL_PORT = config('EMAIL_PORT', default=25, cast=int)
+EMAIL_HOST_USER = config('EMAIL_HOST_USER', default='')
+EMAIL_HOST_PASSWORD = config('EMAIL_HOST_PASSWORD', default='')
+EMAIL_USE_TLS = config('EMAIL_USE_TLS', default=False, cast=bool)
+EMAIL_USE_SSL = config('EMAIL_USE_SSL', default=False, cast=bool)
+DEFAULT_FROM_EMAIL = config('DEFAULT_FROM_EMAIL', default='lineamientos@iess.gob.ec')
+
 # Messages
 from django.contrib.messages import constants as messages_constants
 MESSAGE_TAGS = {

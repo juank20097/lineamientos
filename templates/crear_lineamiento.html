@@ -213,6 +213,7 @@
       document.getElementById(`status-${tipo}`).innerHTML = '';
       document.getElementById(`manual-${tipo}`).style.display = 'none';
       actualizarBotonGuardar();
+      activarBloqueoNavegacion();
     }
 
     function marcarError(tipo, msg) {
@@ -339,8 +340,41 @@
         inp.value = t;
         this.appendChild(inp);
       });
+      desactivarBloqueoNavegacion();
       mostrarLoading('Guardando lineamiento...');
     });
+
+    // ── BLOQUEO DE NAVEGACION HACIA ATRAS ──────────────────────────────────────
+    // Una vez que se crea al menos un ticket hijo en Znuny, ya no es seguro
+    // dejar que "Atras" saque al usuario de esta pantalla sin completar el
+    // formulario: quedaria un ticket huerfano sin registro en la BD local.
+    let bloqueoNavegacionActivo = false;
+
+    function activarBloqueoNavegacion() {
+      if (bloqueoNavegacionActivo) return;
+      bloqueoNavegacionActivo = true;
+      history.pushState({ znunyLock: true }, '', window.location.href);
+      window.addEventListener('popstate', handlePopStateBloqueo);
+      window.addEventListener('beforeunload', handleBeforeUnloadBloqueo);
+    }
+
+    function desactivarBloqueoNavegacion() {
+      bloqueoNavegacionActivo = false;
+      window.removeEventListener('popstate', handlePopStateBloqueo);
+      window.removeEventListener('beforeunload', handleBeforeUnloadBloqueo);
+    }
+
+    function handlePopStateBloqueo() {
+      if (!bloqueoNavegacionActivo) return;
+      alert('No puedes regresar en este punto porque ya se inicio la creacion de un ticket en Znuny. Debes completar el proceso o contactar al administrador si hubo un error.');
+      history.pushState({ znunyLock: true }, '', window.location.href);
+    }
+
+    function handleBeforeUnloadBloqueo(e) {
+      if (!bloqueoNavegacionActivo) return;
+      e.preventDefault();
+      e.returnValue = '';
+    }
   </script>
 </body>
 </html>

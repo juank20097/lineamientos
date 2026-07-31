@@ -28,7 +28,7 @@
       <option value="">-- Seleccione un responsable --</option>
       {% for u in usuarios %}
         <option value="{{ u.pk }}" data-nombre="{{ u.get_full_name|default:u.username }}">
-          {{ u.get_full_name|default:u.username }} ({{ u.username }})
+          {{ u.get_full_name|default:u.username }} ({{ u.username }}) &mdash; En curso: {{ u.en_curso }} | Finalizados: {{ u.finalizados }}
         </option>
       {% empty %}
         <option disabled>No hay usuarios con este rol</option>

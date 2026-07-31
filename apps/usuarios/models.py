@@ -11,6 +11,11 @@ ROLES_DICT = dict(ROLES_CHOICES)
 
 
 class Usuario(AbstractUser):
+    first_name = models.CharField(max_length=150, blank=False, verbose_name='Nombres')
+    last_name  = models.CharField(max_length=150, blank=False, verbose_name='Apellidos')
+    email      = models.EmailField(blank=False, unique=True, verbose_name='Correo electronico')
+
+    REQUIRED_FIELDS = ['first_name', 'last_name', 'email']
 
     roles = models.JSONField(
         default=list,

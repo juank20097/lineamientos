@@ -8,7 +8,8 @@ Uso:
     with ZnunySession() as page:
         page.goto(...)
         # ... lógica del script
-    # Al salir del context manager cierra sesion automaticamente
+    # Al salir del context manager la sesion se conserva en disco
+    # (storage_state) para que la proxima ejecucion sea inmediata.
 """
 
 import os
@@ -22,6 +23,11 @@ SESSION_FILE = Path(__file__).parent / '.znuny_session.json'
 URL_BASE     = 'https://soporte.iess.gob.ec'
 URL          = f'{URL_BASE}/otrs/index.pl'
 TIMEOUT      = 120_000
+LOGIN_TIMEOUT = 30_000
+
+# Znuny/OTRS mantiene polling en segundo plano (notificaciones, sesion), por lo
+# que 'networkidle' puede no resolverse nunca. Se usa 'domcontentloaded' + espera
+# explicita del selector relevante en su lugar.
 
 
 def _cargar_credenciales():
@@ -35,28 +41,65 @@ def _cargar_credenciales():
 def _esta_logueado(page) -> bool:
     """Navega a la raiz y verifica si hay formulario de login (sesion expirada)."""
     try:
-        page.goto(URL, wait_until='networkidle', timeout=20_000)
-        # Si aparece el input #User, la sesion expiro
+        page.goto(URL, wait_until='domcontentloaded', timeout=LOGIN_TIMEOUT)
+        # Atajo: si la URL resultante ya es una pantalla autenticada (redirect
+        # tipico tras sesion valida, ej. ?Action=Admin o el dashboard de agente),
+        # evitamos esperar selectores y confirmamos sesion activa de inmediato.
+        if 'Action=Login' not in page.url and page.locator('#User').count() == 0:
+            return True
+        # Espera a que se resuelva a login (#User) o a la vista logueada (barra superior).
+        page.wait_for_selector('#User, #LoginButton, #Header, #ToolBar', state='visible', timeout=LOGIN_TIMEOUT)
         return page.locator('#User').count() == 0
+    except PlaywrightTimeout:
+        return False
     except Exception:
         return False
 
 
 def _hacer_login(page, user: str, password: str) -> bool:
-    """Realiza el login. Retorna True si fue exitoso."""
-    page.goto(URL, wait_until='networkidle')
-    if page.locator('#User').count() > 0:
+    """Realiza el login. Retorna True si fue exitoso. Lanza RuntimeError con detalle si falla."""
+    page.goto(URL, wait_until='domcontentloaded', timeout=LOGIN_TIMEOUT)
+
+    try:
+        page.wait_for_selector('#User', state='visible', timeout=LOGIN_TIMEOUT)
+    except PlaywrightTimeout:
+        # Puede que ya haya sesion activa (no aparece el formulario de login).
+        if page.locator('#User').count() == 0:
+            return True
+        _screenshot_debug(page, 'debug_login_no_user_field.png')
+        raise RuntimeError(
+            "No se encontro el campo de usuario (#User) en la pagina de login. "
+            "Verifica que el selector siga vigente en la version actual de Znuny."
+        )
+
+    try:
         page.fill('#User', user)
+        page.wait_for_selector('#Password', state='visible', timeout=LOGIN_TIMEOUT)
         page.fill('#Password', password)
-        with page.expect_navigation(wait_until='networkidle', timeout=TIMEOUT):
+    except PlaywrightTimeout as e:
+        _screenshot_debug(page, 'debug_login_fill_error.png')
+        raise RuntimeError(f"No se pudo completar el formulario de login: {e}")
+
+    try:
+        page.wait_for_selector('#LoginButton', state='visible', timeout=LOGIN_TIMEOUT)
+        with page.expect_navigation(wait_until='domcontentloaded', timeout=LOGIN_TIMEOUT):
             page.click('#LoginButton')
+    except PlaywrightTimeout as e:
+        _screenshot_debug(page, 'debug_login_click_error.png')
+        raise RuntimeError(f"El boton de login (#LoginButton) no respondio a tiempo: {e}")
+
+    try:
+        page.wait_for_selector('#User, #Header, #ToolBar', state='visible', timeout=LOGIN_TIMEOUT)
+    except PlaywrightTimeout:
+        _screenshot_debug(page, 'debug_login_post_click.png')
+
     return page.locator('#User').count() == 0
 
 
-def _hacer_logout(page):
-    """Cierra la sesion en Znuny."""
+def _screenshot_debug(page, filename: str):
+    """Guarda una captura de pantalla para diagnostico cuando el login falla."""
     try:
-        page.goto(f'{URL}?Action=Logout', wait_until='networkidle', timeout=15_000)
+        page.screenshot(path=str(Path(__file__).parent / filename))
     except Exception:
         pass
 
@@ -68,7 +111,8 @@ class ZnunySession:
     - Intenta reutilizar sesion guardada en disco.
     - Si expiro o no existe, hace login automatico.
     - Guarda la sesion actualizada tras cada login.
-    - Cierra sesion al salir del bloque with.
+    - NO cierra sesion al salir del bloque with (se preserva para reutilizar
+      en la siguiente ejecucion y evitar loguearse desde cero cada vez).
 
     Ejemplo:
         with ZnunySession() as page:
@@ -109,11 +153,23 @@ class ZnunySession:
         self._page = self._context.new_page()
 
         # Verificar si la sesion guardada sigue activa
-        if not _esta_logueado(self._page):
-            ok = _hacer_login(self._page, user, password)
+        try:
+            sesion_activa = _esta_logueado(self._page)
+        except Exception:
+            sesion_activa = False
+
+        if not sesion_activa:
+            # Sesion restaurada invalida/corrupta o inexistente: limpiar cookies
+            # antes de reintentar el login para evitar estados intermedios raros.
+            self._context.clear_cookies()
+            try:
+                ok = _hacer_login(self._page, user, password)
+            except RuntimeError:
+                self.__exit__(None, None, None)
+                raise
             if not ok:
                 self.__exit__(None, None, None)
-                raise RuntimeError('Login fallido en Znuny')
+                raise RuntimeError('Login fallido en Znuny: credenciales incorrectas o pagina inesperada.')
             # Guardar nueva sesion
             self._context.storage_state(path=str(SESSION_FILE))
         else:
@@ -123,21 +179,12 @@ class ZnunySession:
         return self._page
 
     def __exit__(self, exc_type, exc_val, exc_tb):
-        # Cerrar sesion en Znuny
-        if self._page:
-            try:
-                _hacer_logout(self._page)
-            except Exception:
-                pass
+        # NOTA: NO se cierra sesion en Znuny ni se borra SESSION_FILE aqui.
+        # La sesion se mantiene viva en disco (storage_state) para que la
+        # siguiente ejecucion de cualquier script reutilice el login existente
+        # en vez de autenticarse desde cero cada vez.
 
-        # Eliminar archivo de sesion (ya que cerramos sesion)
-        if SESSION_FILE.exists():
-            try:
-                SESSION_FILE.unlink()
-            except Exception:
-                pass
-
-        # Cerrar browser y playwright
+        # Cerrar browser y playwright (solo libera el proceso local, no la sesion remota)
         try:
             if self._browser:
                 self._browser.close()

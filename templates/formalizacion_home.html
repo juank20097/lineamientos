@@ -1,0 +1,465 @@
+{% load znuny_extras %}
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Formalización - IESS</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
+  <style>
+    :root { --iess-verde:#006847; --iess-verde-hover:#00512f; --sidebar-width:260px; --topbar-h:56px; }
+    *{box-sizing:border-box;margin:0;padding:0;}
+    body{font-family:'Segoe UI',sans-serif;background:#f0f2f5;min-height:100vh;}
+    .topbar{position:fixed;top:0;left:0;right:0;height:var(--topbar-h);background:var(--iess-verde);display:flex;align-items:center;padding:0 20px;z-index:1000;box-shadow:0 2px 8px rgba(0,0,0,.18);}
+    .topbar-brand{color:#fff;font-size:1.05rem;font-weight:700;letter-spacing:.5px;display:flex;align-items:center;gap:10px;text-decoration:none;}
+    .topbar-right{margin-left:auto;display:flex;align-items:center;gap:16px;}
+    .user-badge{background:rgba(255,255,255,.15);color:#fff;border-radius:20px;padding:4px 14px;font-size:.82rem;display:flex;align-items:center;gap:6px;}
+    .rol-chip{background:rgba(255,255,255,.2);border-radius:10px;padding:2px 8px;font-size:.74rem;text-transform:uppercase;letter-spacing:.5px;}
+    .btn-logout{background:rgba(255,255,255,.15);border:1px solid rgba(255,255,255,.3);color:#fff;border-radius:8px;padding:5px 14px;font-size:.84rem;cursor:pointer;text-decoration:none;display:flex;align-items:center;gap:6px;transition:background .2s;}
+    .btn-logout:hover{background:rgba(255,255,255,.25);color:#fff;}
+    .sidebar{position:fixed;top:var(--topbar-h);left:0;bottom:0;width:var(--sidebar-width);background:#fff;border-right:1px solid #e5e9ee;display:flex;flex-direction:column;z-index:900;box-shadow:2px 0 8px rgba(0,0,0,.04);}
+    .sidebar-section{padding:20px 12px 8px;}
+    .sidebar-section-label{font-size:.7rem;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:#b0b8c1;padding:0 8px;margin-bottom:6px;}
+    .sidebar-btn{display:flex;align-items:center;gap:10px;width:100%;padding:11px 14px;border:none;border-radius:8px;background:var(--iess-verde);color:#fff;font-size:.92rem;font-weight:600;cursor:pointer;text-decoration:none;transition:background .18s,transform .1s;margin-bottom:4px;}
+    .sidebar-btn:hover{background:var(--iess-verde-hover);color:#fff;transform:translateX(2px);}
+    .sidebar-nav-item{display:flex;align-items:center;gap:10px;padding:9px 14px;border-radius:8px;color:#4a5568;text-decoration:none;font-size:.9rem;transition:background .15s,color .15s;margin-bottom:2px;}
+    .sidebar-nav-item:hover{background:#f0f7f4;color:var(--iess-verde);}
+    .sidebar-nav-item.active{background:#e6f2ed;color:var(--iess-verde);font-weight:600;}
+    .sidebar-footer{margin-top:auto;padding:16px 12px;border-top:1px solid #eef1f4;font-size:.75rem;color:#b0b8c1;text-align:center;}
+    .main-content{margin-left:var(--sidebar-width);margin-top:var(--topbar-h);padding:32px 36px;min-height:calc(100vh - var(--topbar-h));}
+    .ticket-link{color:inherit;text-decoration:none;cursor:pointer;}
+    .ticket-link:hover{color:var(--iess-verde);text-decoration:underline;}
+    .ticket-link i{font-size:.7em;margin-left:2px;vertical-align:middle;}
+  </style>
+</head>
+<body>
+
+  <nav class="topbar">
+    <a href="{% url 'home' %}" class="topbar-brand">
+      <i class="bi bi-shield-check-fill" style="font-size:1.3rem"></i> LINEAMIENTOS &mdash; SDNAS
+    </a>
+    <div class="topbar-right">
+      <div class="user-badge">
+        <i class="bi bi-person-circle"></i>
+        {{ request.user.get_full_name|default:request.user.username }}
+        <span class="rol-chip">{{ request.user.get_rol_display }}</span>
+      </div>
+      <a href="{% url 'logout' %}" class="btn-logout"><i class="bi bi-box-arrow-right"></i> Salir</a>
+    </div>
+  </nav>
+
+  {% include '_sidebar.html' with seccion_activa='formalizacion' %}
+
+  <main class="main-content">
+    {% if messages %}
+      {% for msg in messages %}
+        <div class="alert alert-{{ msg.tags }} alert-dismissible fade show mb-3" role="alert">
+          {{ msg }}<button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        </div>
+      {% endfor %}
+    {% endif %}
+
+    <h6 class="fw-bold mb-3" style="color:#374151;">
+      <i class="bi bi-list-task me-2" style="color:var(--iess-verde);"></i>
+      Mis Formalizaciones
+      {% if firmas_pendientes %}<span class="badge ms-1" style="background:var(--iess-verde);font-size:.75rem;">{{ firmas_pendientes|length }}</span>{% endif %}
+    </h6>
+
+    {% if firmas_pendientes %}
+    <div class="table-responsive" style="border-radius:10px;overflow:hidden;box-shadow:0 2px 12px rgba(0,0,0,.06);">
+      <table class="table table-hover mb-0" style="background:#fff;font-size:.88rem;">
+        <thead style="background:var(--iess-verde);color:#fff;">
+          <tr><th class="py-3 ps-4">Ticket Principal</th><th>Tipo</th><th>Ticket Hijo</th><th>Versión</th><th>Fecha</th><th>Accion</th></tr>
+        </thead>
+        <tbody>
+          {% for firma in firmas_pendientes %}
+          <tr>
+            <td class="ps-4 py-3"><a href="{% ticket_url firma.formalizacion.lineamiento.ticket_principal %}" target="_blank" class="fw-semibold ticket-link" style="font-family:monospace;">#{{ firma.formalizacion.lineamiento.ticket_principal }}<i class="bi bi-box-arrow-up-right"></i></a></td>
+            <td><span class="badge" style="font-size:.72rem;{% if firma.detalle.tipo == 'software' %}background:#eff6ff;color:#2563eb;{% elif firma.detalle.tipo == 'bdd' %}background:#f5f3ff;color:#7c3aed;{% else %}background:#fffbeb;color:#d97706;{% endif %}">{{ firma.detalle.get_tipo_display }}</span></td>
+            <td><a href="{% ticket_url firma.detalle.ticket_interno %}" target="_blank" class="ticket-link" style="font-family:monospace;font-size:.82rem;">#{{ firma.detalle.ticket_interno }}<i class="bi bi-box-arrow-up-right"></i></a></td>
+            <td><span class="badge bg-light text-dark border" style="font-size:.75rem;font-family:monospace;">{% if firma.version_generado %}v{{ firma.version_generado.version_display }}{% else %}&mdash;{% endif %}</span></td>
+            <td style="color:#6b7280;">{{ firma.formalizacion.fecha_creacion|date:"d/m/Y H:i" }}</td>
+            <td>
+              <button type="button" class="btn btn-sm fw-semibold text-white btn-firmar"
+                data-firma="{{ firma.pk }}"
+                data-url="{% url 'firmar_formalizacion' firma.pk %}"
+                data-preview-url="{% url 'formalizacion_preview_pdf' firma.pk %}"
+                style="background:var(--iess-verde);border:none;border-radius:7px;padding:5px 14px;font-size:.82rem;">
+                <i class="bi bi-pen me-1"></i>Firmar
+              </button>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% else %}
+    <div style="background:#fff;border-radius:10px;padding:28px;text-align:center;box-shadow:0 2px 12px rgba(0,0,0,.06);color:#9ca3af;">
+      <i class="bi bi-inbox" style="font-size:2rem;"></i>
+      <p class="mt-2 mb-0" style="font-size:.9rem;">No tienes formalizaciones pendientes de firmar.</p>
+    </div>
+    {% endif %}
+
+    {% if firmas_atendidas %}
+    <h6 class="fw-bold mb-3 mt-5" style="color:#374151;">
+      <i class="bi bi-check2-all me-2" style="color:#16a34a;"></i>
+      Formalizaciones Atendidas
+      <span class="badge ms-1" style="background:#16a34a;font-size:.75rem;">{{ firmas_atendidas|length }}</span>
+    </h6>
+    <div class="table-responsive" style="border-radius:10px;overflow:hidden;box-shadow:0 2px 12px rgba(0,0,0,.06);">
+      <table class="table table-hover mb-0" style="background:#fff;font-size:.88rem;">
+        <thead style="background:#16a34a;color:#fff;">
+          <tr><th class="py-3 ps-4">Ticket Principal</th><th>Tipo</th><th>Ticket Hijo</th><th>Versión</th><th>Fecha</th><th>Observación</th><th>Accion</th></tr>
+        </thead>
+        <tbody>
+          {% for firma in firmas_atendidas %}
+          <tr style="opacity:.88;">
+            <td class="ps-4 py-3"><a href="{% ticket_url firma.formalizacion.lineamiento.ticket_principal %}" target="_blank" class="fw-semibold ticket-link" style="font-family:monospace;">#{{ firma.formalizacion.lineamiento.ticket_principal }}<i class="bi bi-box-arrow-up-right"></i></a></td>
+            <td><span class="badge" style="font-size:.72rem;{% if firma.detalle.tipo == 'software' %}background:#eff6ff;color:#2563eb;{% elif firma.detalle.tipo == 'bdd' %}background:#f5f3ff;color:#7c3aed;{% else %}background:#fffbeb;color:#d97706;{% endif %}">{{ firma.detalle.get_tipo_display }}</span></td>
+            <td><a href="{% ticket_url firma.detalle.ticket_interno %}" target="_blank" class="ticket-link" style="font-family:monospace;font-size:.82rem;">#{{ firma.detalle.ticket_interno }}<i class="bi bi-box-arrow-up-right"></i></a></td>
+            <td><span class="badge bg-light text-dark border" style="font-size:.75rem;font-family:monospace;">{% if firma.version_generado %}v{{ firma.version_generado.version_display }}{% else %}&mdash;{% endif %}</span></td>
+            <td style="color:#6b7280;">{{ firma.fecha_firma|date:"d/m/Y H:i" }}</td>
+            <td style="max-width:220px;font-size:.78rem;color:#92400e;">
+              {% if firma.observacion %}
+              <i class="bi bi-info-circle-fill me-1"></i>{{ firma.observacion }}
+              {% endif %}
+            </td>
+            <td>
+              {% if firma.formalizacion.formalizado %}
+              <a href="{{ firma.formalizacion.documento.url }}" target="_blank" class="btn btn-sm fw-semibold text-white"
+                style="background:#dc2626;border:none;border-radius:7px;padding:5px 14px;font-size:.82rem;">
+                <i class="bi bi-file-earmark-pdf-fill me-1"></i>PDF
+              </a>
+              {% else %}
+              <button type="button" class="btn btn-sm fw-semibold" disabled
+                title="El documento aún tiene firmas pendientes de otros responsables; no está disponible hasta estar 100% firmado."
+                style="background:#e5e7eb;color:#9ca3af;border:none;border-radius:7px;padding:5px 14px;font-size:.82rem;cursor:not-allowed;">
+                <i class="bi bi-file-earmark-pdf me-1"></i>PDF
+              </button>
+              {% endif %}
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% endif %}
+
+  </main>
+
+  <!-- MODAL FIRMA ELECTRONICA (FirmaEC) -->
+  <div class="modal fade" id="modalFirmaEC" tabindex="-1" data-bs-backdrop="static">
+    <div class="modal-dialog modal-dialog-centered modal-lg">
+      <div class="modal-content" style="border-radius:12px;overflow:hidden;">
+        <div class="modal-header" style="background:var(--iess-verde);color:#fff;border:none;">
+          <h5 class="modal-title"><i class="bi bi-pen-fill me-2"></i>Firma Electrónica</h5>
+          <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body p-4">
+
+          <!-- PASO 1: vista previa de la ultima pagina + seleccion del punto de firma -->
+          <div id="firmaPasoPreview">
+            <p class="text-muted mb-2" style="font-size:.85rem;">
+              Haz clic sobre la última página del documento en el lugar exacto donde deseas estampar tu firma
+              (ej. sobre tu nombre en "Elaborado por").
+            </p>
+            <div id="firmaPreviewMsg" style="font-size:.85rem;min-height:20px;"></div>
+            <div style="position:relative;text-align:center;background:#f0f2f5;border-radius:8px;padding:10px;max-height:60vh;overflow:auto;">
+              <canvas id="firmaPreviewCanvas" style="cursor:crosshair;max-width:100%;box-shadow:0 2px 8px rgba(0,0,0,.15);"></canvas>
+            </div>
+            <div class="d-flex justify-content-between align-items-center mt-3">
+              <span id="firmaPuntoSeleccionado" class="text-muted" style="font-size:.82rem;"></span>
+              <button type="button" id="btnContinuarFirma" class="btn text-white fw-semibold" disabled
+                style="background:var(--iess-verde);border-radius:8px;padding:8px 20px;">
+                Continuar <i class="bi bi-arrow-right ms-1"></i>
+              </button>
+            </div>
+          </div>
+
+          <!-- PASO 2: credenciales FirmaEC -->
+          <div id="firmaPasoCredenciales" style="display:none;">
+            <button type="button" id="btnVolverPreview" style="background:none;border:none;color:var(--iess-verde);font-size:.82rem;cursor:pointer;padding:0;margin-bottom:12px;">
+              <i class="bi bi-arrow-left me-1"></i>Volver a elegir posición
+            </button>
+            <p class="text-muted mb-3" style="font-size:.85rem;">
+              Ingresa tu cédula y el certificado de firma electrónica (.p12) para firmar este documento mediante FirmaEC.
+            </p>
+            <div class="mb-3">
+              <label class="form-label" style="font-size:.85rem;font-weight:600;">Cédula</label>
+              <input type="text" id="firmaEcCedula" class="form-control" placeholder="Ej: 1712345678" autocomplete="off">
+            </div>
+            <div class="mb-3">
+              <label class="form-label" style="font-size:.85rem;font-weight:600;">Certificado (.p12)</label>
+              <input type="file" id="firmaEcArchivo" class="form-control" accept=".p12,.pfx">
+            </div>
+            <div class="mb-3">
+              <label class="form-label" style="font-size:.85rem;font-weight:600;">Contraseña del certificado</label>
+              <input type="password" id="firmaEcPassword" class="form-control" autocomplete="new-password">
+            </div>
+            <div id="firmaEcMsg" style="font-size:.85rem;min-height:20px;"></div>
+            <button type="button" id="btnConfirmarFirmaEC" class="btn text-white fw-semibold w-100 mt-2"
+              style="background:var(--iess-verde);border-radius:8px;padding:10px;">
+              <i class="bi bi-pen me-1"></i>Firmar Documento
+            </button>
+          </div>
+
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- OVERLAY DE BLOQUEO TOTAL DURANTE EL PROCESO DE FIRMA -->
+  <div id="overlayFirmaEC" style="display:none;position:fixed;inset:0;background:rgba(15,23,42,.75);z-index:2000;align-items:center;justify-content:center;flex-direction:column;text-align:center;padding:20px;">
+    <div class="spinner-border text-light mb-3" style="width:3rem;height:3rem;" role="status"></div>
+    <p class="text-white fw-semibold mb-0" style="font-size:1rem;">Procesando firma electrónica...</p>
+    <p class="text-white-50" style="font-size:.85rem;">Por favor no cierre esta ventana ni recargue la página.</p>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.min.js"></script>
+  <script>
+    const CSRF = '{{ csrf_token }}';
+    pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.worker.min.js';
+
+    // ── BLOQUEO TOTAL DE LA UI MIENTRAS LA FIRMA ESTA EN CURSO ──
+    function bloquearUI(){
+      const overlay = document.getElementById('overlayFirmaEC');
+      overlay.style.display = 'flex';
+      document.body.style.overflow = 'hidden';
+      document.querySelectorAll('button, a, input, select, textarea').forEach(el => {
+        if (el.closest('#overlayFirmaEC')) return;
+        if (el.disabled) return;
+        el.dataset.bloqueadoPorFirma = '1';
+        el.disabled = true;
+        if (el.tagName === 'A') { el.dataset.hrefOriginal = el.getAttribute('href') || ''; el.removeAttribute('href'); }
+      });
+      window.addEventListener('beforeunload', avisoRecarga);
+    }
+
+    function desbloquearUI(){
+      const overlay = document.getElementById('overlayFirmaEC');
+      overlay.style.display = 'none';
+      document.body.style.overflow = '';
+      document.querySelectorAll('[data-bloqueado-por-firma="1"]').forEach(el => {
+        el.disabled = false;
+        delete el.dataset.bloqueadoPorFirma;
+        if (el.tagName === 'A' && el.dataset.hrefOriginal !== undefined) {
+          el.setAttribute('href', el.dataset.hrefOriginal);
+          delete el.dataset.hrefOriginal;
+        }
+      });
+      window.removeEventListener('beforeunload', avisoRecarga);
+    }
+
+    function avisoRecarga(e){
+      e.preventDefault();
+      e.returnValue = '';
+    }
+
+    // ── FIRMA ELECTRONICA (FirmaEC): vista previa de la ultima pagina (pdf.js)
+    // + seleccion manual del punto de firma, y luego cedula + .p12 + password ──
+    (function(){
+      const modalEl = document.getElementById('modalFirmaEC');
+      const modal   = new bootstrap.Modal(modalEl);
+      let btnActivo = null;
+
+      const pasoPreview  = document.getElementById('firmaPasoPreview');
+      const pasoCreds    = document.getElementById('firmaPasoCredenciales');
+      const canvas       = document.getElementById('firmaPreviewCanvas');
+      const ctx          = canvas.getContext('2d');
+      const previewMsg   = document.getElementById('firmaPreviewMsg');
+      const puntoLabel   = document.getElementById('firmaPuntoSeleccionado');
+      const btnContinuar = document.getElementById('btnContinuarFirma');
+
+      // Coordenadas seleccionadas, en puntos PDF (origen abajo-izquierda,
+      // igual que el sistema que espera el WS de FirmaEC). Corresponden a la
+      // esquina SUPERIOR IZQUIERDA del cuadrado de firma (ver dibujado mas abajo).
+      let puntoPdf = null;
+      // Tamano real de la ultima pagina en puntos PDF (viewport a escala 1),
+      // necesario para invertir el eje Y del canvas (que tiene origen arriba).
+      let paginaPuntos = null;
+      // Snapshot del canvas limpio (pagina recien renderizada, sin marcador),
+      // para poder "borrar" el cuadrado anterior antes de dibujar el nuevo:
+      // solo debe existir UN marcador activo a la vez.
+      let snapshotLimpio = null;
+
+      // Tamano aproximado del area de firma, en puntos PDF (equivalente a
+      // 150x50 px de un estampado tipico de firma electronica/QR).
+      const FIRMA_ANCHO_PT = 150;
+      const FIRMA_ALTO_PT  = 50;
+
+      function resetModal(){
+        document.getElementById('firmaEcCedula').value = '';
+        document.getElementById('firmaEcArchivo').value = '';
+        document.getElementById('firmaEcPassword').value = '';
+        document.getElementById('firmaEcMsg').innerHTML = '';
+        const btnConfirmar = document.getElementById('btnConfirmarFirmaEC');
+        btnConfirmar.disabled = false;
+        btnConfirmar.innerHTML = '<i class="bi bi-pen me-1"></i>Firmar Documento';
+
+        pasoPreview.style.display = 'block';
+        pasoCreds.style.display   = 'none';
+        previewMsg.innerHTML = '';
+        puntoLabel.textContent = '';
+        puntoPdf = null;
+        paginaPuntos = null;
+        snapshotLimpio = null;
+        btnContinuar.disabled = true;
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+      }
+
+      function cargarVistaPrevia(previewUrl){
+        previewMsg.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span> Cargando última página del documento...';
+        pdfjsLib.getDocument(previewUrl).promise
+          .then(pdf => pdf.getPage(pdf.numPages))
+          .then(page => {
+            const viewportBase = page.getViewport({ scale: 1 });
+            paginaPuntos = { width: viewportBase.width, height: viewportBase.height };
+
+            // Escala de render: ajustar al ancho disponible del modal, con buena resolucion.
+            const escala = Math.min(900 / viewportBase.width, 2);
+            const viewport = page.getViewport({ scale: escala });
+            canvas.width  = viewport.width;
+            canvas.height = viewport.height;
+
+            return page.render({ canvasContext: ctx, viewport }).promise;
+          })
+          .then(() => {
+            previewMsg.innerHTML = '';
+            // Guarda la pagina ya renderizada, sin ningun marcador, para
+            // poder restaurarla antes de dibujar un nuevo cuadrado.
+            snapshotLimpio = ctx.getImageData(0, 0, canvas.width, canvas.height);
+          })
+          .catch(err => {
+            previewMsg.innerHTML = '<span class="text-danger">No se pudo cargar la vista previa del documento. Puedes continuar sin seleccionar posición.</span>';
+            btnContinuar.disabled = false; // permite continuar con la posicion por defecto del servidor
+          });
+      }
+
+      canvas.addEventListener('click', function(e){
+        if (!paginaPuntos) return;
+        const rect = canvas.getBoundingClientRect();
+        // Posicion del clic relativa al canvas, en pixeles CSS, escalada al
+        // tamano real del canvas (por si el navegador lo muestra redimensionado).
+        const xCanvas = (e.clientX - rect.left) * (canvas.width  / rect.width);
+        const yCanvas = (e.clientY - rect.top)  * (canvas.height / rect.height);
+
+        // Convertir de pixeles del canvas (origen arriba-izquierda) a puntos
+        // PDF (origen abajo-izquierda, 1 punto = 1/72 pulgada): escalar segun
+        // el tamano real de la pagina e invertir el eje Y. El clic marca la
+        // esquina superior izquierda del cuadrado de firma.
+        const xPdf = (xCanvas / canvas.width)  * paginaPuntos.width;
+        const yPdfSuperior = paginaPuntos.height - (yCanvas / canvas.height) * paginaPuntos.height;
+        const yPdf = yPdfSuperior - FIRMA_ALTO_PT; // WS espera lly = base del cuadrado, no el borde superior
+
+        puntoPdf = { llx: xPdf, lly: yPdf };
+
+        // Solo un marcador activo a la vez: se restaura la pagina limpia
+        // antes de dibujar el nuevo cuadrado, para que el anterior desaparezca.
+        dibujarMarcadorCuadrado(xCanvas, yCanvas);
+
+        puntoLabel.innerHTML = `<i class="bi bi-geo-alt-fill me-1" style="color:var(--iess-verde);"></i>Posición seleccionada (x=${Math.round(xPdf)}, y=${Math.round(yPdf)} pts)`;
+        btnContinuar.disabled = false;
+      });
+
+      function dibujarMarcadorCuadrado(xCanvas, yCanvas){
+        if (snapshotLimpio) {
+          ctx.putImageData(snapshotLimpio, 0, 0);
+        }
+        // Tamano del cuadrado en pixeles de canvas, proporcional a la escala
+        // de render actual (para que 150x50pt se vea del tamano real relativo).
+        const escalaX = canvas.width  / paginaPuntos.width;
+        const escalaY = canvas.height / paginaPuntos.height;
+        const w = FIRMA_ANCHO_PT * escalaX;
+        const h = FIRMA_ALTO_PT  * escalaY;
+
+        ctx.save();
+        ctx.strokeStyle = '#dc2626';
+        ctx.lineWidth = 2.5;
+        ctx.setLineDash([6, 4]);
+        ctx.strokeRect(xCanvas, yCanvas, w, h);
+        ctx.setLineDash([]);
+        ctx.fillStyle = 'rgba(220, 38, 38, 0.08)';
+        ctx.fillRect(xCanvas, yCanvas, w, h);
+        ctx.restore();
+      }
+
+      document.querySelectorAll('.btn-firmar').forEach(btn => {
+        btn.addEventListener('click', function(){
+          btnActivo = this;
+          resetModal();
+          modal.show();
+          cargarVistaPrevia(this.dataset.previewUrl);
+        });
+      });
+
+      btnContinuar.addEventListener('click', function(){
+        pasoPreview.style.display = 'none';
+        pasoCreds.style.display   = 'block';
+      });
+
+      document.getElementById('btnVolverPreview').addEventListener('click', function(){
+        pasoCreds.style.display   = 'none';
+        pasoPreview.style.display = 'block';
+      });
+
+      document.getElementById('btnConfirmarFirmaEC').addEventListener('click', function(){
+        if (!btnActivo) return;
+        const cedula   = document.getElementById('firmaEcCedula').value.trim();
+        const archivo  = document.getElementById('firmaEcArchivo').files[0];
+        const password = document.getElementById('firmaEcPassword').value;
+        const msg      = document.getElementById('firmaEcMsg');
+
+        if (!cedula || !archivo || !password) {
+          msg.innerHTML = '<span class="text-danger">Completa cédula, certificado .p12 y contraseña.</span>';
+          return;
+        }
+
+        const url  = btnActivo.dataset.url;
+        const fila = btnActivo.closest('tr');
+        const fd   = new FormData();
+        fd.append('cedula', cedula);
+        fd.append('archivo_p12', archivo);
+        fd.append('password_p12', password);
+        if (puntoPdf) {
+          fd.append('llx', puntoPdf.llx);
+          fd.append('lly', puntoPdf.lly);
+        }
+
+        this.disabled = true;
+        this.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span> Firmando...';
+        msg.innerHTML = '';
+        bloquearUI();
+
+        fetch(url, { method: 'POST', headers: { 'X-CSRFToken': CSRF }, body: fd })
+          .then(r => r.json())
+          .then(data => {
+            desbloquearUI();
+            if (data.ok) {
+              modal.hide();
+              fila.remove();
+              if (data.formalizado) {
+                alert('Firma registrada. Todos los responsables ya firmaron: el documento quedó Formalizado.');
+              } else {
+                alert('Firma registrada. Aún faltan otros responsables por firmar.');
+              }
+              window.location.reload();
+            } else {
+              this.disabled = false;
+              this.innerHTML = '<i class="bi bi-pen me-1"></i>Firmar Documento';
+              msg.innerHTML = `<span class="text-danger">${data.error || 'Error desconocido al firmar.'}</span>`;
+            }
+          })
+          .catch(() => {
+            desbloquearUI();
+            this.disabled = false;
+            this.innerHTML = '<i class="bi bi-pen me-1"></i>Firmar Documento';
+            msg.innerHTML = '<span class="text-danger">Error de conexión al firmar.</span>';
+          });
+      });
+    })();
+  </script>
+
+</body>
+</html>

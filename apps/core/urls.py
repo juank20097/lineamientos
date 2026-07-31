@@ -3,6 +3,14 @@ from . import views
 
 urlpatterns = [
     path('home/',                                        views.home_view,                    name='home'),
+    path('tickets/asignadas/',                           views.tickets_asignadas_view,       name='tickets_asignadas'),
+    path('tickets/atendidas/',                            views.tickets_atendidas_view,       name='tickets_atendidas'),
+    path('formalizacion/',                               views.formalizacion_view,           name='formalizacion'),
+    path('formalizacion/asignadas/',                     views.formalizacion_asignadas_view, name='formalizacion_asignadas'),
+    path('formalizacion/atendidas/',                     views.formalizacion_atendidas_view, name='formalizacion_atendidas'),
+    path('formalizacion/firmar/<int:firma_id>/',         views.firmar_formalizacion_ajax,     name='firmar_formalizacion'),
+    path('formalizacion/preview/<int:firma_id>/',        views.formalizacion_preview_pdf,     name='formalizacion_preview_pdf'),
+    path('formalizacion/revertir/<int:lineamiento_id>/', views.revertir_formalizacion_ajax,   name='revertir_formalizacion'),
     path('lineamiento/validar-ticket/',                  views.validar_ticket_ajax,          name='validar_ticket'),
     path('lineamiento/crear-hijo/',                      views.crear_hijo_ajax,              name='crear_hijo'),
     path('lineamiento/crear/',                           views.crear_lineamiento_view,       name='crear_lineamiento'),
@@ -14,6 +22,8 @@ urlpatterns = [
     path('lineamiento/finalizar/<int:detalle_id>/',      views.finalizar_ajax,               name='finalizar_lineamiento'),
     path('lineamiento/version/<int:detalle_id>/',        views.cargar_version_ajax,          name='cargar_version'),
     path('lineamiento/descargar/<int:lineamiento_id>/',  views.descargar_pdf_solicitud,      name='descargar_solicitud'),
+    path('lineamiento/formalizar/<int:lineamiento_id>/', views.formalizar_ajax,              name='formalizar_lineamiento'),
+    path('lineamiento/estado-formalizacion/<int:lineamiento_id>/', views.estado_formalizacion_ajax, name='estado_formalizacion'),
     path('lineamiento/editar/<int:lineamiento_id>/',     views.editar_solicitud_view,        name='editar_solicitud'),
     path('lineamiento/detalle/<int:detalle_id>/eliminar/', views.eliminar_detalle_view,      name='eliminar_detalle'),
 ]

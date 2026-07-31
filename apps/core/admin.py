@@ -1,7 +1,9 @@
+from django import forms
 from django.contrib import admin
 from .models import (
     Lineamiento, LineamientoDetalle, Guideline,
     LineamientoGenerado, LineamientoGeneradoFila,
+    Autoridad,
 )
 
 
@@ -82,17 +84,46 @@ class LineamientoGeneradoFilaAdmin(admin.ModelAdmin):
         return obj.necesidad[:80] + '...' if len(obj.necesidad) > 80 else obj.necesidad
 
 
+# ── AUTORIDAD ─────────────────────────────────────────────────────────────────
+
+class AutoridadAdminForm(forms.ModelForm):
+    clave_p12 = forms.CharField(
+        label='Contraseña del certificado', required=False,
+        widget=forms.PasswordInput(render_value=True),
+        help_text='Opcional. Sin cedula + certificado + contraseña completos, esta '
+                  'Autoridad no firma digitalmente (solo aparece como texto en el PDF).',
+    )
+
+    class Meta:
+        model = Autoridad
+        fields = '__all__'
+
+
+@admin.register(Autoridad)
+class AutoridadAdmin(admin.ModelAdmin):
+    form = AutoridadAdminForm
+    list_display    = ('nombre_completo', 'tipo', 'cargo', 'puede_firmar', 'activo', 'fecha_creacion')
+    list_filter     = ('tipo', 'activo')
+    search_fields   = ('nombre_completo', 'cedula', 'correo')
+    readonly_fields = ('fecha_creacion',)
+
+    @admin.display(boolean=True, description='Firma digital')
+    def puede_firmar(self, obj):
+        return obj.puede_firmar
+
+
 # ── GUIDELINE ─────────────────────────────────────────────────────────────────
 
 @admin.register(Guideline)
 class GuidelineAdmin(admin.ModelAdmin):
-    list_display       = ('id', 'necesidad', 'mecanismo_corto')
+    list_display       = ('id', 'tipo', 'necesidad', 'mecanismo_corto')
     list_display_links = ('id', 'necesidad')
+    list_filter        = ('tipo',)
     search_fields      = ('necesidad', 'lineamiento', 'mecanismo')
     ordering           = ('id',)
 
     fieldsets = (
-        (None, {'fields': ('necesidad', 'mecanismo')}),
+        (None, {'fields': ('tipo', 'necesidad', 'mecanismo')}),
         ('Contenido', {'fields': ('lineamiento',), 'classes': ('wide',)}),
         ('Observacion', {'fields': ('observacion',), 'classes': ('collapse',)}),
     )

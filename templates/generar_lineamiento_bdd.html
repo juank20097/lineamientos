@@ -795,7 +795,11 @@
           bdd_sequences: SEQUENCES,
         })})
       .then(r=>r.json())
-      .then(data=>{ if(data.ok) window.location.href='/'; else{ocultarLoading();btn.disabled=false;alert('Error al guardar.');} })
+      .then(data=>{
+        if(data.ok) window.location.href='/';
+        else if(data.bloqueado){ alert(data.error); window.location.href='/'; }
+        else{ocultarLoading();btn.disabled=false;alert('Error al guardar: '+(data.error||'desconocido'));}
+      })
       .catch(()=>{ocultarLoading();btn.disabled=false;alert('Error de conexion.');});
     });
   </script>
