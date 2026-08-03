@@ -1,0 +1,36 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.egg-info/
+.mypy_cache/
+.pytest_cache/
+
+# Entorno virtual local
+venv/
+.venv/
+
+# Control de versiones
+.git/
+.gitignore
+
+# Entornos / secrets locales (solo .env.production, inyectado aparte, entra al contenedor)
+.env
+.env.local
+.env.*.local
+
+# Archivos generados en runtime / build (se sirven via volumen o se generan en el build)
+media/
+staticfiles/
+
+# Editor / IDE
+.vscode/
+.idea/
+.claude/
+.clinerules
+
+# Otros
+*.log
+prueba.txt
+nginx/certs/

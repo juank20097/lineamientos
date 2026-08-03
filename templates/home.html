@@ -31,20 +31,29 @@
     .welcome-card{background:#fff;border-radius:12px;padding:32px 36px;box-shadow:0 2px 12px rgba(0,0,0,.06);border-left:4px solid var(--iess-verde);}
     .welcome-card h4{color:var(--iess-verde);font-weight:700;margin-bottom:6px;}
     .welcome-card p{color:#64748b;font-size:.92rem;margin:0;}
-    #loading-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:9999;flex-direction:column;align-items:center;justify-content:center;gap:16px;}
-    #loading-overlay .spinner-border{width:3rem;height:3rem;color:#fff;}
-    #loading-overlay p{color:#fff;font-size:1rem;font-weight:500;margin:0;}
     .ticket-link{color:inherit;text-decoration:none;cursor:pointer;}
     .ticket-link:hover{color:var(--iess-verde);text-decoration:underline;}
     .ticket-link i{font-size:.7em;margin-left:2px;vertical-align:middle;}
+
+    .repo-search{background:#fff;border-radius:12px;padding:18px 22px;box-shadow:0 2px 12px rgba(0,0,0,.06);display:flex;gap:14px;align-items:flex-end;flex-wrap:wrap;}
+    .repo-search .field{display:flex;flex-direction:column;gap:4px;}
+    .repo-search label{font-size:.76rem;font-weight:600;color:#64748b;text-transform:uppercase;letter-spacing:.4px;}
+    .repo-search input{border:1px solid #e2e8f0;border-radius:8px;padding:8px 12px;font-size:.88rem;}
+    .repo-search input:focus{outline:none;border-color:var(--iess-verde);box-shadow:0 0 0 3px rgba(0,104,71,.1);}
+    #buscadorCodigo{min-width:260px;font-family:monospace;}
+    #buscadorTicket{min-width:180px;font-family:monospace;}
+    .repo-search .btn-limpiar{background:none;border:1px solid #e2e8f0;color:#64748b;border-radius:8px;padding:8px 14px;font-size:.85rem;cursor:pointer;height:38px;}
+    .repo-search .btn-limpiar:hover{background:#f8fafc;}
+
+    .repo-count{font-size:.82rem;color:#94a3b8;margin:14px 0 10px;}
+    .badge-tipo{font-size:.7rem;font-weight:700;border-radius:5px;padding:2px 7px;margin-right:3px;display:inline-block;}
+    .badge-sw{background:#eff6ff;color:#2563eb;}
+    .badge-bdd{background:#f5f3ff;color:#7c3aed;}
+    .badge-inf{background:#fff1ee;color:#c2410c;}
+    .row-oculta{display:none!important;}
   </style>
 </head>
 <body>
-
-  <div id="loading-overlay">
-    <div class="spinner-border" role="status"></div>
-    <p>Verificando ticket en Znuny, por favor espere...</p>
-  </div>
 
   <nav class="topbar">
     <a href="{% url 'home' %}" class="topbar-brand">
@@ -60,7 +69,7 @@
     </div>
   </nav>
 
-  {% include '_sidebar.html' with seccion_activa='tickets' %}
+  {% include '_sidebar.html' with seccion_activa='repositorio' %}
 
   <main class="main-content">
     {% if messages %}
@@ -78,72 +87,66 @@
 
     <div class="mt-4">
 
-      {# ── VISTA USUARIO: pendientes + atendidas ── #}
-
       <h6 class="fw-bold mb-3" style="color:#374151;">
-        <i class="bi bi-list-task me-2" style="color:var(--iess-verde);"></i>
-        Mis Solicitudes
-        {% if detalles_pendientes %}<span class="badge ms-1" style="background:var(--iess-verde);font-size:.75rem;">{{ detalles_pendientes|length }}</span>{% endif %}
+        <i class="bi bi-archive-fill me-2" style="color:var(--iess-verde);"></i>
+        Repositorio de Lineamientos Formalizados
       </h6>
 
-      {% if detalles_pendientes %}
+      <div class="repo-search">
+        <div class="field">
+          <label for="buscadorCodigo">Código Documento</label>
+          <input type="text" id="buscadorCodigo" placeholder="PAS-MLT-...">
+        </div>
+        <div class="field">
+          <label for="buscadorTicket">Ticket Padre</label>
+          <input type="text" id="buscadorTicket" placeholder="Número de ticket">
+        </div>
+        <div class="field">
+          <label for="buscadorFechaDesde">Desde</label>
+          <input type="date" id="buscadorFechaDesde">
+        </div>
+        <div class="field">
+          <label for="buscadorFechaHasta">Hasta</label>
+          <input type="date" id="buscadorFechaHasta">
+        </div>
+        <button type="button" class="btn-limpiar" id="btnLimpiarBusqueda"><i class="bi bi-x-lg me-1"></i>Limpiar</button>
+      </div>
+
+      <div class="repo-count" id="repoCount">{{ repositorio|length }} documento{{ repositorio|length|pluralize }} formalizado{{ repositorio|length|pluralize }}</div>
+
+      {% if repositorio %}
       <div class="table-responsive" style="border-radius:10px;overflow:hidden;box-shadow:0 2px 12px rgba(0,0,0,.06);">
         <table class="table table-hover mb-0" style="background:#fff;font-size:.88rem;">
           <thead style="background:var(--iess-verde);color:#fff;">
-            <tr><th class="py-3 ps-4">Ticket Principal</th><th>Tipo</th><th>Ticket Hijo</th><th>Fecha</th><th>Accion</th></tr>
-          </thead>
-          <tbody>
-            {% for d in detalles_pendientes %}
             <tr>
-              <td class="ps-4 py-3"><a href="{% ticket_url d.lineamiento.ticket_principal %}" target="_blank" class="fw-semibold ticket-link" style="font-family:monospace;">#{{ d.lineamiento.ticket_principal }}<i class="bi bi-box-arrow-up-right"></i></a></td>
-              <td><span class="badge" style="font-size:.72rem;{% if d.tipo == 'software' %}background:#eff6ff;color:#2563eb;{% elif d.tipo == 'bdd' %}background:#f5f3ff;color:#7c3aed;{% else %}background:#fffbeb;color:#d97706;{% endif %}">{{ d.get_tipo_display }}</span></td>
-              <td><a href="{% ticket_url d.ticket_interno %}" target="_blank" class="ticket-link" style="font-family:monospace;font-size:.82rem;">#{{ d.ticket_interno }}<i class="bi bi-box-arrow-up-right"></i></a></td>
-              <td style="color:#6b7280;">{{ d.lineamiento.fecha_creacion|date:"d/m/Y H:i" }}</td>
-              <td>
-                <a href="{% url 'generar_lineamiento' d.pk %}" class="btn btn-sm fw-semibold text-white" style="background:var(--iess-verde);border:none;border-radius:7px;padding:5px 14px;font-size:.82rem;">
-                  <i class="bi bi-file-earmark-text me-1"></i>Generar
-                </a>
-              </td>
+              <th class="py-3 ps-4">Código Documento</th>
+              <th>Ticket Padre</th>
+              <th>Tipos Incluidos</th>
+              <th>Fecha Formalización</th>
+              <th>Acciones</th>
             </tr>
-            {% endfor %}
-          </tbody>
-        </table>
-      </div>
-      {% else %}
-      <div style="background:#fff;border-radius:10px;padding:28px;text-align:center;box-shadow:0 2px 12px rgba(0,0,0,.06);color:#9ca3af;">
-        <i class="bi bi-inbox" style="font-size:2rem;"></i>
-        <p class="mt-2 mb-0" style="font-size:.9rem;">No tienes solicitudes pendientes.</p>
-      </div>
-      {% endif %}
-
-      {% if detalles_atendidos %}
-      <h6 class="fw-bold mb-3 mt-5" style="color:#374151;">
-        <i class="bi bi-check2-all me-2" style="color:#16a34a;"></i>
-        Solicitudes Atendidas
-        <span class="badge ms-1" style="background:#16a34a;font-size:.75rem;">{{ detalles_atendidos|length }}</span>
-      </h6>
-      <div class="table-responsive" style="border-radius:10px;overflow:hidden;box-shadow:0 2px 12px rgba(0,0,0,.06);">
-        <table class="table table-hover mb-0" style="background:#fff;font-size:.88rem;">
-          <thead style="background:#16a34a;color:#fff;">
-            <tr><th class="py-3 ps-4">Ticket Principal</th><th>Tipo</th><th>Ticket Hijo</th><th>Fecha</th><th>Accion</th></tr>
           </thead>
-          <tbody>
-            {% for d in detalles_atendidos %}
-            <tr style="opacity:.88;">
-              <td class="ps-4 py-3"><a href="{% ticket_url d.lineamiento.ticket_principal %}" target="_blank" class="fw-semibold ticket-link" style="font-family:monospace;">#{{ d.lineamiento.ticket_principal }}<i class="bi bi-box-arrow-up-right"></i></a></td>
-              <td><span class="badge" style="font-size:.72rem;{% if d.tipo == 'software' %}background:#eff6ff;color:#2563eb;{% elif d.tipo == 'bdd' %}background:#f5f3ff;color:#7c3aed;{% else %}background:#fffbeb;color:#d97706;{% endif %}">{{ d.get_tipo_display }}</span></td>
-              <td><a href="{% ticket_url d.ticket_interno %}" target="_blank" class="ticket-link" style="font-family:monospace;font-size:.82rem;">#{{ d.ticket_interno }}<i class="bi bi-box-arrow-up-right"></i></a></td>
-              <td style="color:#6b7280;">{{ d.lineamiento.fecha_creacion|date:"d/m/Y H:i" }}</td>
+          <tbody id="repoBody">
+            {% for f in repositorio %}
+            <tr class="fila-repo" data-codigo="{{ f.codigo_documento|lower }}" data-ticket="{{ f.lineamiento.ticket_principal }}" data-fecha="{{ f.fecha_cierre_ticket_padre|date:'Y-m-d' }}">
+              <td class="ps-4 py-3 fw-semibold" style="font-family:monospace;">{{ f.codigo_documento }}</td>
+              <td><a href="{% ticket_url f.lineamiento.ticket_principal %}" target="_blank" class="fw-semibold ticket-link" style="font-family:monospace;">#{{ f.lineamiento.ticket_principal }}<i class="bi bi-box-arrow-up-right"></i></a></td>
+              <td>
+                {% for tipo in f.tipos_incluidos %}
+                  {% if tipo == 'software' %}<span class="badge-tipo badge-sw">SW</span>
+                  {% elif tipo == 'bdd' %}<span class="badge-tipo badge-bdd">BDD</span>
+                  {% else %}<span class="badge-tipo badge-inf">INF</span>{% endif %}
+                {% endfor %}
+              </td>
+              <td style="color:#6b7280;">{{ f.fecha_cierre_ticket_padre|date:"d/m/Y H:i" }}</td>
               <td>
                 <div class="d-flex align-items-center gap-2">
-                  <button type="button"
-                    class="btn btn-sm fw-semibold btn-actualizar-usuario"
-                    data-detalle="{{ d.pk }}"
-                    data-version="{% if d.ultima_version %}{{ d.ultima_version.version_display }}{% else %}1.0{% endif %}"
-                    data-bloqueado="{% if d.ultima_version.en_formalizacion %}1{% else %}0{% endif %}"
-                    style="background:#fff;border:1.5px solid #16a34a;color:#16a34a;border-radius:7px;padding:4px 12px;font-size:.78rem;">
-                    <i class="bi bi-arrow-repeat me-1"></i>Actualizar
-                  </button>
+                  <a href="{% url 'repositorio_detalle' f.pk %}" class="btn btn-sm fw-semibold" style="background:#fff;border:1.5px solid var(--iess-verde);color:var(--iess-verde);border-radius:7px;padding:5px 12px;font-size:.8rem;">
+                    <i class="bi bi-eye me-1"></i>Ver Detalle
+                  </a>
+                  <a href="{{ f.documento.url }}" target="_blank" class="btn btn-sm fw-semibold text-white" style="background:var(--iess-verde);border:none;border-radius:7px;padding:5px 12px;font-size:.8rem;">
+                    <i class="bi bi-file-earmark-pdf-fill me-1"></i>Descargar
+                  </a>
                 </div>
               </td>
             </tr>
@@ -151,218 +154,58 @@
           </tbody>
         </table>
       </div>
+      <div id="sinResultados" style="display:none;background:#fff;border-radius:10px;padding:28px;text-align:center;box-shadow:0 2px 12px rgba(0,0,0,.06);color:#9ca3af;">
+        <i class="bi bi-search" style="font-size:2rem;"></i>
+        <p class="mt-2 mb-0" style="font-size:.9rem;">Ningún documento coincide con la búsqueda.</p>
+      </div>
+      {% else %}
+      <div style="background:#fff;border-radius:10px;padding:28px;text-align:center;box-shadow:0 2px 12px rgba(0,0,0,.06);color:#9ca3af;">
+        <i class="bi bi-archive" style="font-size:2rem;"></i>
+        <p class="mt-2 mb-0" style="font-size:.9rem;">Aún no hay lineamientos formalizados.</p>
+      </div>
       {% endif %}
 
     </div>
   </main>
 
-  <!-- MODAL ACTUALIZAR USUARIO (no-staff) -->
-  <div class="modal fade" id="modalActualizarUsuario" tabindex="-1">
-    <div class="modal-dialog modal-dialog-centered">
-      <div class="modal-content" style="border-radius:12px;overflow:hidden;">
-        <div class="modal-header" style="background:#16a34a;color:#fff;border:none;">
-          <h5 class="modal-title"><i class="bi bi-arrow-repeat me-2"></i>Actualizar Lineamiento</h5>
-          <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
-        </div>
-        <div class="modal-body p-4">
-
-          <!-- Paso 1: elegir modo -->
-          <div id="uPaso1">
-            <p style="font-size:.9rem;color:#475569;">Versión actual: <strong id="versionActualUsuario"></strong>. ¿Qué deseas hacer?</p>
-            <div id="avisoVersionBloqueada" style="display:none;background:#fef2f2;border:1px solid #fecaca;color:#991b1b;border-radius:8px;padding:10px 14px;font-size:.82rem;margin-top:10px;">
-              <i class="bi bi-lock-fill me-1"></i>Esta versión ya está en proceso de formalización y no puede editarse directamente. Crea una nueva versión para realizar cambios.
-            </div>
-            <div class="d-flex flex-column gap-3 mt-3">
-              <button id="btnUsuarioActualizar" class="btn text-white fw-semibold text-start" style="background:#16a34a;border-radius:8px;padding:12px 16px;">
-                <i class="bi bi-pencil-square me-2"></i>Actualizar versión actual
-                <small class="d-block fw-normal opacity-75 mt-1" style="font-size:.78rem;">Edición manual — el asistente estará bloqueado.</small>
-              </button>
-              <button id="btnUsuarioNuevaVersion" class="btn fw-semibold text-start" style="background:#f0fdf4;color:#16a34a;border:1.5px solid #16a34a;border-radius:8px;padding:12px 16px;">
-                <i class="bi bi-plus-circle me-2"></i>Crear nueva versión
-                <small class="d-block fw-normal opacity-75 mt-1" style="font-size:.78rem;" id="labelNVUsuario"></small>
-              </button>
-            </div>
-          </div>
-
-          <!-- Paso 2: ticket nueva version -->
-          <div id="uPaso2" style="display:none;">
-            <button id="btnUsuarioVolverPaso1" style="background:none;border:none;color:#16a34a;font-size:.82rem;cursor:pointer;padding:0;margin-bottom:12px;">
-              <i class="bi bi-arrow-left me-1"></i>Volver
-            </button>
-            <p style="font-size:.9rem;color:#475569;">Ingresa el ticket de Znuny para esta nueva versión:</p>
-            <input type="text" id="inputTicketNV" class="form-control mt-2"
-              placeholder="Ej: Ticket#2026... o solo el numero" autocomplete="off" style="font-family:monospace;">
-            <div id="msgTicketNV2" style="font-size:.85rem;min-height:20px;margin-top:6px;"></div>
-            <button id="btnValidarTicketNV" class="btn fw-semibold text-white w-100 mt-3"
-              style="background:#16a34a;border-radius:8px;padding:10px;">
-              <i class="bi bi-search me-1"></i>Verificar y Continuar
-            </button>
-          </div>
-
-          <!-- Paso 3: FALLBACK MANUAL (Znuny no respondio, dio error, o no encontro el ticket) -->
-          <div id="uPaso3Manual" style="display:none;">
-            <div class="alert alert-warning" style="font-size:.85rem;">
-              <i class="bi bi-exclamation-triangle-fill me-1"></i>
-              No se pudo conectar con Znuny automáticamente. Por favor, ingrese los datos del ticket manualmente para continuar.
-            </div>
-            <label class="form-label fw-semibold">Número de Ticket</label>
-            <input type="text" id="uManualNumero" class="form-control mb-2" placeholder="Ej: Ticket#2026... o solo el numero" autocomplete="off">
-            <label class="form-label fw-semibold">Asunto / Título del ticket</label>
-            <input type="text" id="uManualAsunto" class="form-control mb-2" autocomplete="off">
-            <label class="form-label fw-semibold">Solicitante</label>
-            <input type="text" id="uManualSolicitante" class="form-control mb-2" autocomplete="off">
-            <label class="form-label fw-semibold">Descripción breve (opcional)</label>
-            <textarea id="uManualDescripcion" class="form-control mb-2" rows="2"></textarea>
-            <div id="uMsgManual" style="font-size:.85rem;min-height:20px;"></div>
-            <button id="btnUsuarioReintentarAuto" class="btn btn-link p-0 mb-2" style="font-size:.82rem;">
-              <i class="bi bi-arrow-clockwise me-1"></i>Reintentar búsqueda automática
-            </button>
-            <button id="btnUsuarioContinuarManual" class="btn fw-semibold text-white w-100"
-              style="background:#d97706;border-radius:8px;padding:10px;">
-              <i class="bi bi-arrow-right-circle me-1"></i>Continuar Creación
-            </button>
-          </div>
-
-        </div>
-      </div>
-    </div>
-  </div>
-
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
   <script>
-    const CSRF = '{{ csrf_token }}';
-    function znunyUrl(numero){ return `{% ticket_url "___" %}`.replace('___', numero); }
-    function mostrarLoading(){ document.getElementById('loading-overlay').style.display='flex'; }
-    function ocultarLoading(){ document.getElementById('loading-overlay').style.display='none'; }
+    const inputCodigo = document.getElementById('buscadorCodigo');
+    const inputTicket = document.getElementById('buscadorTicket');
+    const inputDesde  = document.getElementById('buscadorFechaDesde');
+    const inputHasta  = document.getElementById('buscadorFechaHasta');
+    const filas       = [...document.querySelectorAll('.fila-repo')];
+    const repoCount   = document.getElementById('repoCount');
+    const sinResultados = document.getElementById('sinResultados');
 
-    // ── MODAL ACTUALIZAR USUARIO (no-staff) ──
-    ;(function(){
-      const modalEl = document.getElementById('modalActualizarUsuario');
-      if (!modalEl) return;
-      let detalleActivo = null;
+    function filtrar(){
+      const codigo = inputCodigo.value.trim().toLowerCase();
+      const ticket = inputTicket.value.trim();
+      const desde  = inputDesde.value;
+      const hasta  = inputHasta.value;
+      let visibles = 0;
 
-      function resetPasosUsuario(){
-        document.getElementById('uPaso1').style.display = 'block';
-        document.getElementById('uPaso2').style.display = 'none';
-        document.getElementById('uPaso3Manual').style.display = 'none';
-        document.getElementById('inputTicketNV').value = '';
-        document.getElementById('msgTicketNV2').innerHTML = '';
-        const btn = document.getElementById('btnValidarTicketNV');
-        btn.disabled = false;
-        btn.innerHTML = '<i class="bi bi-search me-1"></i>Verificar y Continuar';
-      }
-
-      const ZNUNY_TIMEOUT_MS = 30000; // si Znuny no responde en 30s, se cancela la espera y se activa el fallback manual
-
-      function mostrarPaso3Manual(numeroPrellenado){
-        document.getElementById('uPaso2').style.display = 'none';
-        document.getElementById('uPaso3Manual').style.display = 'block';
-        document.getElementById('uManualNumero').value = numeroPrellenado || '';
-        document.getElementById('uMsgManual').innerHTML = '';
-      }
-
-      document.querySelectorAll('.btn-actualizar-usuario').forEach(btn => {
-        btn.addEventListener('click', function(){
-          detalleActivo = this.dataset.detalle;
-          const ver       = this.dataset.version || '1.0';
-          const bloqueado = this.dataset.bloqueado === '1';
-          const sigV = parseInt(ver) + 1;
-          document.getElementById('versionActualUsuario').textContent = `v${ver}`;
-          document.getElementById('labelNVUsuario').textContent = `Se creará v${sigV}.0 — ingresa el ticket asociado`;
-          resetPasosUsuario();
-
-          const btnActualizar = document.getElementById('btnUsuarioActualizar');
-          const avisoBloqueo  = document.getElementById('avisoVersionBloqueada');
-          btnActualizar.style.display = bloqueado ? 'none' : 'block';
-          avisoBloqueo.style.display  = bloqueado ? 'block' : 'none';
-
-          new bootstrap.Modal(modalEl).show();
-        });
+      filas.forEach(fila => {
+        const matchCodigo = !codigo || fila.dataset.codigo.includes(codigo);
+        const matchTicket = !ticket || fila.dataset.ticket.includes(ticket);
+        const fecha       = fila.dataset.fecha;
+        const matchDesde  = !desde || (fecha && fecha >= desde);
+        const matchHasta  = !hasta || (fecha && fecha <= hasta);
+        const visible = matchCodigo && matchTicket && matchDesde && matchHasta;
+        fila.classList.toggle('row-oculta', !visible);
+        if (visible) visibles++;
       });
 
-      // Paso 1 → Actualizar
-      document.getElementById('btnUsuarioActualizar').addEventListener('click', () => {
-        bootstrap.Modal.getInstance(modalEl).hide();
-        window.location.href = `/lineamiento/generar/${detalleActivo}/?modo=actualizar`;
-      });
+      repoCount.textContent = `${visibles} documento${visibles !== 1 ? 's' : ''} formalizado${visibles !== 1 ? 's' : ''}`;
+      if (sinResultados) sinResultados.style.display = (filas.length > 0 && visibles === 0) ? 'block' : 'none';
+    }
 
-      // Paso 1 → Nueva versión
-      document.getElementById('btnUsuarioNuevaVersion').addEventListener('click', () => {
-        document.getElementById('uPaso1').style.display = 'none';
-        document.getElementById('uPaso2').style.display = 'block';
-        document.getElementById('inputTicketNV').focus();
-      });
+    [inputCodigo, inputTicket, inputDesde, inputHasta].forEach(el => el.addEventListener('input', filtrar));
 
-      // Volver
-      document.getElementById('btnUsuarioVolverPaso1').addEventListener('click', () => {
-        document.getElementById('uPaso1').style.display = 'block';
-        document.getElementById('uPaso2').style.display = 'none';
-      });
-
-      // Validar ticket nueva versión
-      function validarNV(){
-        const numero = document.getElementById('inputTicketNV').value.replace(/^ticket#/i,'').trim();
-        const msg    = document.getElementById('msgTicketNV2');
-        const btn    = document.getElementById('btnValidarTicketNV');
-        if (!numero){ msg.innerHTML='<span class="text-danger">Ingrese un numero de ticket.</span>'; return; }
-        btn.disabled = true;
-        btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span> Verificando...';
-        mostrarLoading();
-
-        const controller = new AbortController();
-        const timeoutId  = setTimeout(() => controller.abort(), ZNUNY_TIMEOUT_MS);
-
-        fetch('{% url "validar_ticket" %}',{
-          method:'POST',
-          headers:{'Content-Type':'application/x-www-form-urlencoded','X-CSRFToken':CSRF},
-          body:`numero=${encodeURIComponent(numero)}`,
-          signal: controller.signal,
-        })
-        .then(r=>r.json())
-        .then(data=>{
-          clearTimeout(timeoutId);
-          ocultarLoading();
-          btn.disabled = false;
-          btn.innerHTML = '<i class="bi bi-search me-1"></i>Verificar y Continuar';
-          if (data.existe){
-            bootstrap.Modal.getInstance(modalEl).hide();
-            window.location.href = `/lineamiento/generar/${detalleActivo}/?modo=nueva_version&ticket=${encodeURIComponent(data.numero)}`;
-          } else {
-            // Znuny respondio pero no encontro el ticket: se ofrece el fallback manual.
-            mostrarPaso3Manual(numero);
-          }
-        })
-        .catch(()=>{
-          // Timeout o error de conexion/HTTP: activar modo manual inmediatamente.
-          clearTimeout(timeoutId);
-          ocultarLoading();
-          btn.disabled = false;
-          btn.innerHTML = '<i class="bi bi-search me-1"></i>Verificar y Continuar';
-          mostrarPaso3Manual(numero);
-        });
-      }
-      document.getElementById('btnValidarTicketNV').addEventListener('click', validarNV);
-      document.getElementById('inputTicketNV').addEventListener('keydown', e=>{ if(e.key==='Enter') validarNV(); });
-
-      document.getElementById('btnUsuarioReintentarAuto')?.addEventListener('click', () => {
-        document.getElementById('uPaso3Manual').style.display = 'none';
-        document.getElementById('uPaso2').style.display = 'block';
-      });
-
-      document.getElementById('btnUsuarioContinuarManual')?.addEventListener('click', () => {
-        const msg = document.getElementById('uMsgManual');
-        const numero = document.getElementById('uManualNumero').value.replace(/^ticket#/i,'').trim();
-        const asunto = document.getElementById('uManualAsunto').value.trim();
-        const solicitante = document.getElementById('uManualSolicitante').value.trim();
-        if (!numero){ msg.innerHTML = '<span class="text-danger">Ingrese el número de ticket.</span>'; return; }
-        if (!asunto){ msg.innerHTML = '<span class="text-danger">Ingrese el asunto del ticket.</span>'; return; }
-        if (!solicitante){ msg.innerHTML = '<span class="text-danger">Ingrese el solicitante.</span>'; return; }
-        bootstrap.Modal.getInstance(modalEl).hide();
-        window.location.href = `/lineamiento/generar/${detalleActivo}/?modo=nueva_version&ticket=${encodeURIComponent(numero)}&verificacion_manual=1`;
-      });
-
-    })();
-
+    document.getElementById('btnLimpiarBusqueda').addEventListener('click', () => {
+      inputCodigo.value = ''; inputTicket.value = ''; inputDesde.value = ''; inputHasta.value = '';
+      filtrar();
+    });
   </script>
 </body>
 </html>

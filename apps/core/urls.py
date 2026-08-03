@@ -3,6 +3,8 @@ from . import views
 
 urlpatterns = [
     path('home/',                                        views.home_view,                    name='home'),
+    path('repositorio/<int:formalizacion_id>/',          views.repositorio_detalle_view,     name='repositorio_detalle'),
+    path('tickets/mis-tickets/',                         views.mis_tickets_view,             name='mis_tickets'),
     path('tickets/asignadas/',                           views.tickets_asignadas_view,       name='tickets_asignadas'),
     path('tickets/atendidas/',                            views.tickets_atendidas_view,       name='tickets_atendidas'),
     path('formalizacion/',                               views.formalizacion_view,           name='formalizacion'),
@@ -11,11 +13,13 @@ urlpatterns = [
     path('formalizacion/firmar/<int:firma_id>/',         views.firmar_formalizacion_ajax,     name='firmar_formalizacion'),
     path('formalizacion/preview/<int:firma_id>/',        views.formalizacion_preview_pdf,     name='formalizacion_preview_pdf'),
     path('formalizacion/revertir/<int:lineamiento_id>/', views.revertir_formalizacion_ajax,   name='revertir_formalizacion'),
+    path('formalizacion/reemplazar-documento/<int:formalizacion_id>/', views.reemplazar_documento_formalizacion_ajax, name='reemplazar_documento_formalizacion'),
     path('lineamiento/validar-ticket/',                  views.validar_ticket_ajax,          name='validar_ticket'),
     path('lineamiento/crear-hijo/',                      views.crear_hijo_ajax,              name='crear_hijo'),
     path('lineamiento/crear/',                           views.crear_lineamiento_view,       name='crear_lineamiento'),
     path('lineamiento/generar/<int:detalle_id>/',        views.generar_lineamiento_view,     name='generar_lineamiento'),
     path('lineamiento/generar-bdd/<int:detalle_id>/',    views.generar_lineamiento_bdd_view, name='generar_lineamiento_bdd'),
+    path('lineamiento/generar-capacidad/<int:detalle_id>/', views.generar_lineamiento_capacidad_view, name='generar_lineamiento_capacidad'),
     path('lineamiento/cargar-sql/<int:detalle_id>/',     views.cargar_sql_ajax,              name='cargar_sql'),
     path('lineamiento/diagrama/<int:detalle_id>/',       views.diagrama_personalizado_ajax,  name='diagrama_personalizado'),
     path('lineamiento/chat/<int:detalle_id>/',           views.chat_software_ajax,           name='chat_software'),

@@ -191,7 +191,7 @@ def crear_hijo(numero_padre: str, tipo: str, propietario_nombre: str):
 
             # RESPONSABLE: siempre Daysi Chango
             try:
-                seleccionar_usuario_autocomplete(page, 'NewResponsibleID_Search', 'Juan Estevez')
+                seleccionar_usuario_autocomplete(page, 'NewResponsibleID_Search', 'Daysi Chango')
             except Exception:
                 seleccionar_por_texto(page, 'NewResponsibleID', 'Daysi')
 

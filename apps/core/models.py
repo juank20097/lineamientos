@@ -2,8 +2,20 @@ from django.db import models
 from django.conf import settings
 
 
+def _ruta_diagrama_personalizado(instance, filename):
+    """Carpeta destino del diagrama segun el tipo del LineamientoDetalle
+    (BDD e Infraestructura ya no comparten la misma carpeta fisica)."""
+    carpeta = 'diagramas_infra' if instance.tipo == 'infraestructura' else 'diagramas_bdd'
+    return f'{carpeta}/{filename}'
+
+
 class Lineamiento(models.Model):
     ticket_principal = models.CharField(max_length=50, verbose_name='Ticket Principal')
+    id_numerico = models.CharField(
+        max_length=20, default='', verbose_name='ID Numérico del Documento',
+        help_text='Identificador manual usado en el codigo del documento (PAS-MLT-{ID}-{Ticket}). '
+                  'Se conserva tal cual se ingreso (ej. con ceros a la izquierda: "001").',
+    )
     creado_por = models.ForeignKey(
         settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True,
         related_name='lineamientos_creados', verbose_name='Creado por'
@@ -30,8 +42,8 @@ class LineamientoDetalle(models.Model):
         related_name='lineamientos_asignados'
     )
     diagrama_personalizado = models.ImageField(
-        upload_to='diagramas_bdd/', null=True, blank=True,
-        verbose_name='Diagrama ER personalizado',
+        upload_to=_ruta_diagrama_personalizado, null=True, blank=True,
+        verbose_name='Diagrama personalizado',
     )
 
     class Meta:
@@ -137,6 +149,16 @@ class Formalizacion(models.Model):
                    'ya que su contenido depende solo de version_map); se usa para saber cual es la '
                    'ultima pagina donde FirmaEC debe estampar cada firma.',
     )
+    reemplazo_manual = models.BooleanField(
+        default=False, verbose_name='Documento reemplazado manualmente',
+        help_text='True si el PDF fue sustituido a mano por Staff (ej. firma fisica escaneada) '
+                   'en vez de ser generado/firmado por el sistema.',
+    )
+    reemplazado_por = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='formalizaciones_reemplazadas', verbose_name='Reemplazado por',
+    )
+    fecha_reemplazo = models.DateTimeField(null=True, blank=True, verbose_name='Fecha de reemplazo manual')
 
     class Meta:
         verbose_name = 'Formalización'; verbose_name_plural = 'Formalizaciones'

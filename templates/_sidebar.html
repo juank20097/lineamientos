@@ -11,6 +11,8 @@
   <div class="sidebar-section">
     <div class="sidebar-section-label">Menu</div>
 
+    <a href="{% url 'home' %}" class="sidebar-nav-item {% if seccion_activa == 'repositorio' %}active{% endif %}"><i class="bi bi-house-door-fill"></i> Repositorio</a>
+
     {% if request.user.is_staff %}
     <button type="button" class="sidebar-nav-item" id="btnToggleTickets" style="width:100%;border:none;background:none;cursor:pointer;justify-content:space-between;">
       <span><i class="bi bi-ticket-perforated"></i> Tickets</span>
@@ -21,7 +23,7 @@
       <a href="{% url 'tickets_atendidas' %}" class="sidebar-nav-item {% if seccion_activa == 'atendidas' %}active{% endif %}"><i class="bi bi-check2-all"></i> Atendidas</a>
     </div>
     {% else %}
-    <a href="{% url 'home' %}" class="sidebar-nav-item {% if seccion_activa == 'tickets' %}active{% endif %}"><i class="bi bi-ticket-perforated"></i> Tickets</a>
+    <a href="{% url 'mis_tickets' %}" class="sidebar-nav-item {% if seccion_activa == 'tickets' %}active{% endif %}"><i class="bi bi-ticket-perforated"></i> Tickets</a>
     {% endif %}
 
     {% if request.user.is_staff %}

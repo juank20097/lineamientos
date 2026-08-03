@@ -1,4 +1,5 @@
 .env
+.env.production
 znuny/.env
 .claudeignore
 .clinerules
@@ -9,3 +10,4 @@ venv/
 media/
 staticfiles/
 *.pdf
+.claude

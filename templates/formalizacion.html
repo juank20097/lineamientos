@@ -149,13 +149,28 @@
             </td>
             {% if modo != 'asignadas' %}
             <td>
-              {% regroup grupo.firmas by formalizacion as docs_list %}
-              {% for doc in docs_list %}
-              <a href="{{ doc.grouper.documento.url }}" target="_blank" class="btn btn-sm fw-semibold text-white d-block mb-2"
-                style="background:#dc2626;border:none;border-radius:7px;padding:4px 12px;font-size:.78rem;width:fit-content;">
-                <i class="bi bi-file-earmark-pdf-fill me-1"></i>Descargar PDF
-              </a>
-              {% endfor %}
+              <div class="d-flex align-items-center gap-2">
+                <a href="{{ grupo.formalizacion_final.documento.url }}" target="_blank" class="btn btn-sm fw-semibold text-white"
+                  style="background:#dc2626;border:none;border-radius:7px;padding:4px 12px;font-size:.78rem;width:fit-content;">
+                  <i class="bi bi-file-earmark-pdf-fill me-1"></i>Descargar PDF
+                </a>
+                {% if request.user.is_staff and modo == 'atendidas' %}
+                <button type="button" class="btn btn-sm fw-semibold text-white btn-adjuntar-pdf"
+                  data-formalizacion="{{ grupo.formalizacion_final.pk }}"
+                  data-url="{% url 'reemplazar_documento_formalizacion' grupo.formalizacion_final.pk %}"
+                  title="Adjuntar/Reemplazar PDF firmado externamente"
+                  style="background:#4b5563;border:none;border-radius:7px;padding:4px 12px;font-size:.78rem;width:fit-content;">
+                  <i class="bi bi-paperclip me-1"></i>Adjuntar
+                </button>
+                {% endif %}
+              </div>
+              {% if grupo.formalizacion_final.reemplazo_manual %}
+              <span class="d-block mt-1" style="font-size:.7rem;color:#9ca3af;">
+                <i class="bi bi-info-circle me-1"></i>Reemplazado manualmente por
+                {{ grupo.formalizacion_final.reemplazado_por.get_full_name|default:grupo.formalizacion_final.reemplazado_por.username }}
+                el {{ grupo.formalizacion_final.fecha_reemplazo|date:"d/m/Y H:i" }}
+              </span>
+              {% endif %}
             </td>
             {% endif %}
             {% if modo == 'asignadas' and request.user.is_staff %}
@@ -250,6 +265,33 @@
     </div>
   </div>
 
+  <!-- MODAL ADJUNTAR/REEMPLAZAR PDF (Staff) -->
+  <div class="modal fade" id="modalAdjuntarPdf" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+      <div class="modal-content" style="border-radius:12px;overflow:hidden;">
+        <div class="modal-header" style="background:#4b5563;color:#fff;border:none;">
+          <h5 class="modal-title"><i class="bi bi-paperclip me-2"></i>Adjuntar/Reemplazar PDF</h5>
+          <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body p-4">
+          <p class="text-muted mb-3" style="font-size:.85rem;">
+            Sube el PDF final ya firmado externamente (ej. firma física escaneada del Aprobador/Revisor).
+            Este archivo reemplazará al documento actual como la versión definitiva de este ticket.
+          </p>
+          <div class="mb-3">
+            <label class="form-label" style="font-size:.85rem;font-weight:600;">Archivo PDF</label>
+            <input type="file" id="adjuntarPdfArchivo" class="form-control" accept="application/pdf">
+          </div>
+          <div id="adjuntarPdfMsg" style="font-size:.85rem;min-height:20px;"></div>
+          <button type="button" id="btnConfirmarAdjuntarPdf" class="btn text-white fw-semibold w-100 mt-2"
+            style="background:#4b5563;border-radius:8px;padding:10px;">
+            <i class="bi bi-upload me-1"></i>Subir y Reemplazar
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <!-- OVERLAY DE BLOQUEO TOTAL DURANTE EL PROCESO DE FIRMA -->
   <div id="overlayFirmaEC" style="display:none;position:fixed;inset:0;background:rgba(15,23,42,.75);z-index:2000;align-items:center;justify-content:center;flex-direction:column;text-align:center;padding:20px;">
     <div class="spinner-border text-light mb-3" style="width:3rem;height:3rem;" role="status"></div>
@@ -333,6 +375,59 @@
               alert('Error de conexión al revertir.');
             });
         });
+      });
+    })();
+
+    // ── ADJUNTAR/REEMPLAZAR PDF MANUAL (staff) ──
+    (function(){
+      const modalEl = document.getElementById('modalAdjuntarPdf');
+      if (!modalEl) return;
+      const modal = new bootstrap.Modal(modalEl);
+      const inputArchivo = document.getElementById('adjuntarPdfArchivo');
+      const msg = document.getElementById('adjuntarPdfMsg');
+      const btnConfirmar = document.getElementById('btnConfirmarAdjuntarPdf');
+      let urlActual = null;
+      let filaActual = null;
+
+      document.querySelectorAll('.btn-adjuntar-pdf').forEach(btn => {
+        btn.addEventListener('click', function(){
+          urlActual = this.dataset.url;
+          filaActual = this.closest('tr');
+          inputArchivo.value = '';
+          msg.textContent = '';
+          modal.show();
+        });
+      });
+
+      btnConfirmar.addEventListener('click', function(){
+        const archivo = inputArchivo.files[0];
+        if (!archivo) {
+          msg.innerHTML = '<span class="text-danger">Selecciona un archivo PDF.</span>';
+          return;
+        }
+        if (archivo.type !== 'application/pdf') {
+          msg.innerHTML = '<span class="text-danger">El archivo debe ser un PDF.</span>';
+          return;
+        }
+        const fd = new FormData();
+        fd.append('documento', archivo);
+        btnConfirmar.disabled = true;
+        msg.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span> Subiendo...';
+        fetch(urlActual, { method: 'POST', headers: { 'X-CSRFToken': CSRF }, body: fd })
+          .then(r => r.json())
+          .then(data => {
+            btnConfirmar.disabled = false;
+            if (data.ok) {
+              msg.innerHTML = '<span class="text-success">Documento reemplazado correctamente.</span>';
+              setTimeout(() => { modal.hide(); window.location.reload(); }, 700);
+            } else {
+              msg.innerHTML = '<span class="text-danger">' + (data.error || 'No se pudo reemplazar el documento.') + '</span>';
+            }
+          })
+          .catch(() => {
+            btnConfirmar.disabled = false;
+            msg.innerHTML = '<span class="text-danger">Error de conexión al subir el archivo.</span>';
+          });
       });
     })();
 

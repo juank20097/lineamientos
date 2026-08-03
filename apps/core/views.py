@@ -66,19 +66,30 @@ TIPO_ABREV  = {'software': 'SW', 'bdd': 'BDD', 'infraestructura': 'INF'}
 ORDEN_TIPOS = ['software', 'bdd', 'infraestructura']  # SW, BDD, INF
 
 
-def _nombre_pdf(ticket_padre, tipos=None, temporal=False):
+def _codigo_documento(id_numerico, ticket_padre):
+    """Codigo unico del documento: PAS-MLT-{ID_Numerico}-{TicketPadre}
+    (sin el ID, si el Lineamiento aun no lo tiene por ser un registro
+    anterior a la introduccion de este campo, se usa solo el ticket)."""
+    if id_numerico:
+        return f'PAS-MLT-{id_numerico}-{ticket_padre}'
+    return f'PAS-MLT-{ticket_padre}'
+
+
+def _nombre_pdf(id_numerico, ticket_padre, tipos=None, temporal=False):
     """
-    Nomenclatura del PDF (SIEMPRE basada en el Ticket Padre, nunca en el hijo):
-    - final    -> PAS-MLT-{TicketPadre}.pdf
-    - temporal -> PAS-MLT-{TicketPadre}-{Tipos...}-TMP.pdf (tipos en orden SW, BDD, INF)
-    - temporal sin tipos finalizados aun -> PAS-MLT-{TicketPadre}-BORRADOR-TMP.pdf
+    Nomenclatura del PDF (SIEMPRE basada en el codigo del documento
+    PAS-MLT-{ID}-{TicketPadre}, nunca en el ticket hijo):
+    - final    -> PAS-MLT-{ID}-{TicketPadre}.pdf
+    - temporal -> PAS-MLT-{ID}-{TicketPadre}-{Tipos...}-TMP.pdf (tipos en orden SW, BDD, INF)
+    - temporal sin tipos finalizados aun -> PAS-MLT-{ID}-{TicketPadre}-BORRADOR-TMP.pdf
     """
+    codigo = _codigo_documento(id_numerico, ticket_padre)
     if not temporal:
-        return f'PAS-MLT-{ticket_padre}.pdf'
+        return f'{codigo}.pdf'
     tipos = tipos or []
     abrevs = [TIPO_ABREV[t] for t in ORDEN_TIPOS if t in tipos]
     sufijo = '-'.join(abrevs) if abrevs else 'BORRADOR'
-    return f'PAS-MLT-{ticket_padre}-{sufijo}-TMP.pdf'
+    return f'{codigo}-{sufijo}-TMP.pdf'
 
 
 def _run_script(script, args, timeout=150):
@@ -117,6 +128,7 @@ def _generar_pdf_lineamientos(lin, version_map, watermark=False, tipos_incluir=N
 
     hoy        = date.today().strftime('%d/%m/%Y')
     num_doc    = lin.ticket_principal
+    codigo_doc = _codigo_documento(lin.id_numerico, lin.ticket_principal)
     PAGE_W, PAGE_H = landscape(A4)
     MARGIN = 1.5 * cm
 
@@ -125,6 +137,7 @@ def _generar_pdf_lineamientos(lin, version_map, watermark=False, tipos_incluir=N
     GRIS   = colors.HexColor('#475569')
     GRIS_C = colors.HexColor('#f8fafc')
     BDD_C  = colors.HexColor('#7c3aed')
+    INF_C  = colors.HexColor('#FF6347')
 
     # Estilos
     def estilo(nombre, **kw):
@@ -140,6 +153,15 @@ def _generar_pdf_lineamientos(lin, version_map, watermark=False, tipos_incluir=N
     S_CARGO  = estilo('cargo',  fontSize=7, alignment=TA_CENTER, textColor=GRIS)
     S_MONO   = estilo('mono',   fontName='Courier', fontSize=6.5, leading=9)
     S_SUBTIT = estilo('subtit', fontName='Helvetica-Bold', fontSize=9, textColor=BDD_C)
+
+    def texto_pdf(valor):
+        """Escapa texto libre (pegado por el usuario, puede traer '<'/'>'/'&'
+        de SQL u otros simbolos) para que Paragraph no lo interprete como XML,
+        y convierte saltos de linea reales en <br/> para que se respeten en
+        el PDF (Paragraph por si solo ignora '\\n')."""
+        txt = (valor or '')
+        txt = txt.replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;')
+        return txt.replace('\n', '<br/>')
 
     # ── CONSTRUIR INFO DE TICKETS (para el header) ──
     ticket_info_rows = []  # lista de (label, texto) para la tabla de tickets
@@ -175,7 +197,7 @@ def _generar_pdf_lineamientos(lin, version_map, watermark=False, tipos_incluir=N
             Paragraph('Dirección Nacional de Tecnologías de la Información', estilo('dnti', fontSize=8, alignment=TA_CENTER, textColor=GRIS)),
             Paragraph('Subdirección Nacional de Arquitectura y Soluciones', estilo('sdnas', fontSize=8, alignment=TA_CENTER, textColor=GRIS)),
             Spacer(1, 3*mm),
-            Paragraph(f'<b>LINEAMIENTOS TÉCNICOS</b> &nbsp;&nbsp;|&nbsp;&nbsp; Fecha: <b>{hoy}</b> &nbsp;&nbsp;|&nbsp;&nbsp; Doc: <b>PAS-MLT-{num_doc}</b>', S_TITLE),
+            Paragraph(f'<b>LINEAMIENTOS TÉCNICOS</b> &nbsp;&nbsp;|&nbsp;&nbsp; Fecha: <b>{hoy}</b> &nbsp;&nbsp;|&nbsp;&nbsp; Código Documento: <b>{codigo_doc}</b>', S_TITLE),
             Spacer(1, 2*mm),
         ]
         if include_tickets and ticket_info_rows:
@@ -257,13 +279,13 @@ def _generar_pdf_lineamientos(lin, version_map, watermark=False, tipos_incluir=N
         for fila in generado.filas.all():
             row = [
                 Paragraph(str(idx), S_CENTER),
-                Paragraph(responsable, S_CELL),
+                Paragraph(texto_pdf(responsable), S_CELL),
                 Paragraph(tipo_label, S_CENTER),
-                Paragraph(fila.necesidad or '', S_CELL),
-                Paragraph(fila.lineamiento or '', S_CELL),
-                Paragraph(fila.mecanismo or '', S_CELL),
+                Paragraph(texto_pdf(fila.necesidad), S_CELL),
+                Paragraph(texto_pdf(fila.lineamiento), S_CELL),
+                Paragraph(texto_pdf(fila.mecanismo), S_CELL),
                 Paragraph(hoy, S_CENTER),
-                Paragraph(fila.observacion or '', S_CELL),
+                Paragraph(texto_pdf(fila.observacion), S_CELL),
             ]
             tabla_data.append(row)
             idx += 1
@@ -480,11 +502,11 @@ def _generar_pdf_lineamientos(lin, version_map, watermark=False, tipos_incluir=N
                 for col_def in tdata['columns']:
                     pk_label = ' (PK)' if col_def.get('pk') else ''
                     tbl_rows.append([
-                        Paragraph(col_def['name'] + pk_label, S_CELL),
-                        Paragraph(col_def['type'], S_CENTER),
-                        Paragraph(col_def.get('size', ''), S_CENTER),
-                        Paragraph(col_def.get('nullable', ''), S_CENTER),
-                        Paragraph(col_def.get('description', ''), S_CELL),
+                        Paragraph(texto_pdf(col_def['name']) + pk_label, S_CELL),
+                        Paragraph(texto_pdf(col_def['type']), S_CENTER),
+                        Paragraph(texto_pdf(col_def.get('size', '')), S_CENTER),
+                        Paragraph(texto_pdf(col_def.get('nullable', '')), S_CENTER),
+                        Paragraph(texto_pdf(col_def.get('description', '')), S_CELL),
                     ])
                 tbl_bdd = Table(tbl_rows, colWidths=[4*cm, 2.5*cm, 2*cm, 1.5*cm, None])
                 tbl_bdd.setStyle(TableStyle([
@@ -511,6 +533,26 @@ def _generar_pdf_lineamientos(lin, version_map, watermark=False, tipos_incluir=N
                 for parte in partes:
                     story.append(Paragraph(parte.replace('<', '&lt;').replace('>', '&gt;'), S_MONO))
 
+    # ── PAGINA INFRAESTRUCTURA (diagrama de capacidad/topologia) ──
+    infra_detalle = (
+        lin.detalles.filter(tipo='infraestructura').first()
+        if (tipos_incluir is None or 'infraestructura' in tipos_incluir) else None
+    )
+    if infra_detalle and infra_detalle.diagrama_personalizado:
+        story.append(PageBreak())
+        story += cabecera()
+        story.append(Paragraph('DIAGRAMA DE INFRAESTRUCTURA', estilo('inf_t', fontName='Helvetica-Bold', fontSize=10, alignment=TA_CENTER, textColor=INF_C)))
+        story.append(Spacer(1, 4*mm))
+
+        AVAIL_W = PAGE_W - 2 * MARGIN
+        AVAIL_H = PAGE_H - 7 * cm
+        img = RLImage(infra_detalle.diagrama_personalizado.path)
+        scale = min(AVAIL_W / img.imageWidth, AVAIL_H / img.imageHeight, 1.0)
+        img.drawWidth  = img.imageWidth * scale
+        img.drawHeight = img.imageHeight * scale
+        img.hAlign = 'CENTER'
+        story.append(img)
+
     # La hoja de firmas va siempre al final (ultima pagina del documento).
     story += story_firmas
 
@@ -521,7 +563,7 @@ def _generar_pdf_lineamientos(lin, version_map, watermark=False, tipos_incluir=N
         pagesize=landscape(A4),
         leftMargin=MARGIN, rightMargin=MARGIN,
         topMargin=MARGIN, bottomMargin=MARGIN,
-        title=f'Lineamientos PAS-MLT-{num_doc}',
+        title=f'Lineamientos {codigo_doc}',
         author='IESS - SDNAS',
     )
 
@@ -534,7 +576,7 @@ def _generar_pdf_lineamientos(lin, version_map, watermark=False, tipos_incluir=N
         canvas.setFont('Helvetica', 6)
         canvas.setFillColor(colors.HexColor('#94a3b8'))
         canvas.drawRightString(PAGE_W - MARGIN, 0.5*cm, f'Pág. {doc.page}')
-        canvas.drawString(MARGIN, 0.5*cm, f'PAS-MLT-{num_doc} | {hoy} | IESS - DNTI - SDNAS')
+        canvas.drawString(MARGIN, 0.5*cm, f'{codigo_doc} | {hoy} | IESS - DNTI - SDNAS')
         canvas.restoreState()
         if watermark:
             canvas.saveState()
@@ -716,6 +758,29 @@ def generar_lineamiento_bdd_view(request, detalle_id):
     })
 
 
+# ── VISTA INFRAESTRUCTURA / CAPACIDAD ──────────────────────────────────────────
+
+@login_required
+def generar_lineamiento_capacidad_view(request, detalle_id):
+    detalle   = get_object_or_404(LineamientoDetalle, pk=detalle_id, usuario_asignado=request.user)
+    ultima    = detalle.generados.order_by('-version').first()
+    modo      = request.GET.get('modo', 'nuevo')
+    ticket_nv = _limpiar_ticket(request.GET.get('ticket', ''))
+    filas_precarga = []
+    if modo in ('actualizar', 'nueva_version') and ultima:
+        filas_precarga = [
+            {'necesidad': f.necesidad, 'lineamiento': f.lineamiento,
+             'mecanismo': f.mecanismo,  'observacion': f.observacion}
+            for f in ultima.filas.all()
+        ]
+    return render(request, 'generar_lineamiento_capacidad.html', {
+        'detalle': detalle, 'ultima': ultima, 'ya_generado': ultima is not None,
+        'modo': modo, 'ticket_nv': ticket_nv,
+        'filas_precarga': filas_precarga,
+        'diagrama_personalizado_url': detalle.diagrama_personalizado.url if detalle.diagrama_personalizado else '',
+    })
+
+
 @login_required
 @require_POST
 def cargar_sql_ajax(request, detalle_id):
@@ -870,19 +935,121 @@ def crear_hijo_ajax(request):
     return JsonResponse(_run_script(ZNUNY_SCRIPT_CREAR, [ticket_padre, tipo_label, usuario.get_full_name() or usuario.username]))
 
 
-# ── HOME ──────────────────────────────────────────────────────────────────────
+# ── HOME (Repositorio de Lineamientos Formalizados) ───────────────────────────
 
 @login_required
 def home_view(request):
+    """Repositorio publico (visible para staff y no-staff por igual) de
+    Lineamientos ya 100% formalizados: todas las firmas de responsables
+    completas Y el ticket padre cerrado en Znuny. No incluye borradores,
+    procesos en curso, ni formalizaciones atendidas pero sin cerrar."""
+    formalizaciones = (
+        Formalizacion.objects
+        .filter(ticket_padre_cerrado=True)
+        .select_related('lineamiento')
+        .prefetch_related('firmas__detalle', 'firmas__responsable', 'lineamiento__detalles')
+        .order_by('-fecha_cierre_ticket_padre')
+    )
+    # `formalizado` es una property (no un campo de BD): filtrar en Python
+    # sobre el queryset ya reducido por ticket_padre_cerrado=True (el cierre
+    # automatico solo se ejecuta cuando ya estaba formalizado, asi que en la
+    # practica esto siempre es True, pero se valida explicitamente para
+    # respetar la regla de negocio incluso ante datos historicos inconsistentes).
+    repositorio = [f for f in formalizaciones if f.formalizado]
+
+    for f in repositorio:
+        f.codigo_documento = _codigo_documento(f.lineamiento.id_numerico, f.lineamiento.ticket_principal)
+        f.tipos_incluidos = sorted(
+            {firma.detalle.tipo for firma in f.firmas.all()},
+            key=lambda t: ORDEN_TIPOS.index(t) if t in ORDEN_TIPOS else 99,
+        )
+
+    return render(request, 'home.html', {
+        'repositorio': repositorio,
+        'seccion_activa': 'repositorio',
+    })
+
+
+@login_required
+def mis_tickets_view(request):
+    """Vista de trabajo de un responsable no-staff: sus solicitudes de
+    lineamiento pendientes y atendidas (antes vivia en 'home', ahora 'home'
+    es el repositorio publico de formalizados)."""
     user = request.user
     if user.is_staff:
         return redirect('tickets_asignadas')
     detalles_qs         = LineamientoDetalle.objects.filter(usuario_asignado=user).select_related('lineamiento').prefetch_related('generados')
     detalles_pendientes = [d for d in detalles_qs if not d.finalizado]
     detalles_atendidos  = [d for d in detalles_qs if d.finalizado]
-    return render(request, 'home.html', {
+    return render(request, 'mis_tickets.html', {
         'detalles_pendientes': detalles_pendientes,
         'detalles_atendidos':  detalles_atendidos,
+    })
+
+
+@login_required
+def repositorio_detalle_view(request, formalizacion_id):
+    """Detalle de un Lineamiento formalizado del repositorio: contenido
+    tecnico por tipo (Necesidad/Lineamiento/Mecanismo/Observacion), diagramas
+    (BDD/Infraestructura) y quien firmo. Solo accesible para formalizaciones
+    ya cerradas (mismo criterio que el listado del repositorio)."""
+    formalizacion = get_object_or_404(
+        Formalizacion.objects.select_related('lineamiento').prefetch_related(
+            'firmas__detalle', 'firmas__responsable',
+        ),
+        pk=formalizacion_id, ticket_padre_cerrado=True,
+    )
+    if not formalizacion.formalizado:
+        return redirect('home')
+
+    lin = formalizacion.lineamiento
+    version_map = {int(k): v for k, v in formalizacion.version_map.items()}
+    firmas_por_detalle = {firma.detalle_id: firma for firma in formalizacion.firmas.all()}
+
+    secciones = []
+    filas_consolidadas = []
+    for detalle in lin.detalles.all().order_by('tipo'):
+        generado_id = version_map.get(detalle.pk)
+        generado = detalle.generados.filter(pk=generado_id).first() if generado_id else None
+        if generado is None:
+            generado = detalle.generados.order_by('-version').first()
+        firma = firmas_por_detalle.get(detalle.pk)
+        filas = generado.filas.all() if generado else []
+
+        secciones.append({
+            'tipo': detalle.tipo,
+            'tipo_label': detalle.get_tipo_display(),
+            'ticket_interno': detalle.ticket_interno,
+            'generado': generado,
+            'filas': filas,
+            'diagrama_url': detalle.diagrama_personalizado.url if detalle.diagrama_personalizado else '',
+            'responsable': firma.responsable if firma else detalle.usuario_asignado,
+            'firmado': firma.firmado if firma else False,
+            'fecha_firma': firma.fecha_firma if firma else None,
+        })
+
+        for fila in filas:
+            filas_consolidadas.append({
+                'tipo': detalle.tipo,
+                'tipo_label': detalle.get_tipo_display(),
+                'necesidad': fila.necesidad,
+                'lineamiento': fila.lineamiento,
+                'mecanismo': fila.mecanismo,
+                'observacion': fila.observacion,
+            })
+
+    revisor = Autoridad.objects.filter(tipo='revisor', activo=True).first()
+    aprobador = Autoridad.objects.filter(tipo='aprobador', activo=True).first()
+
+    return render(request, 'repositorio_detalle.html', {
+        'formalizacion': formalizacion,
+        'lin': lin,
+        'codigo_documento': _codigo_documento(lin.id_numerico, lin.ticket_principal),
+        'secciones': secciones,
+        'filas_consolidadas': filas_consolidadas,
+        'revisor': revisor,
+        'aprobador': aprobador,
+        'seccion_activa': 'repositorio',
     })
 
 
@@ -944,6 +1111,14 @@ def _agrupar_firmas_por_ticket(firmas):
         indice[ticket]['firmas'].append(firma)
     for grupo in grupos:
         grupo['tiene_firmas_parciales'] = any(f.firmado for f in grupo['firmas'])
+        # PDF final unico por ticket: la Formalizacion mas reciente (la que
+        # consolida todas las firmas). Evita un boton de descarga por cada
+        # tipo/Formalizacion cuando un mismo ticket se formalizo por partes.
+        formalizacion_final = max(
+            (f.formalizacion for f in grupo['firmas']),
+            key=lambda fz: fz.fecha_creacion,
+        )
+        grupo['formalizacion_final'] = formalizacion_final
     return grupos
 
 
@@ -999,6 +1174,42 @@ def formalizacion_atendidas_view(request):
         'modo': 'atendidas',
         'filter_ticket': request.GET.get('filter_ticket', ''),
     })
+
+
+@login_required
+def reemplazar_documento_formalizacion_ajax(request, formalizacion_id):
+    """Permite a Staff subir manualmente un PDF (ej. firmado fisicamente y
+    escaneado) que reemplaza al documento generado por el sistema para una
+    Formalizacion ya completa. Solo aplica sobre formalizaciones 100%
+    firmadas (formalizado=True); queda registrado quien y cuando lo hizo."""
+    if not request.user.is_staff:
+        return JsonResponse({'ok': False, 'error': 'No autorizado.'}, status=403)
+    if request.method != 'POST':
+        return JsonResponse({'ok': False, 'error': 'Metodo no permitido.'}, status=405)
+
+    formalizacion = get_object_or_404(Formalizacion, pk=formalizacion_id)
+    if not formalizacion.formalizado:
+        return JsonResponse({'ok': False, 'error': 'Solo se puede reemplazar el documento de una Formalizacion ya completada.'})
+
+    archivo = request.FILES.get('documento')
+    if not archivo:
+        return JsonResponse({'ok': False, 'error': 'No se recibio ningun archivo.'})
+    if not archivo.name.lower().endswith('.pdf') or archivo.content_type != 'application/pdf':
+        return JsonResponse({'ok': False, 'error': 'El archivo debe ser un PDF.'})
+
+    if formalizacion.documento:
+        formalizacion.documento.delete(save=False)
+    formalizacion.documento = archivo
+    formalizacion.reemplazo_manual = True
+    formalizacion.reemplazado_por = request.user
+    formalizacion.fecha_reemplazo = timezone.now()
+    formalizacion.save(update_fields=['documento', 'reemplazo_manual', 'reemplazado_por', 'fecha_reemplazo'])
+
+    logger.warning(
+        'Documento de Formalizacion #%s (ticket %s) reemplazado manualmente por %s',
+        formalizacion.pk, formalizacion.lineamiento.ticket_principal, request.user.username,
+    )
+    return JsonResponse({'ok': True, 'url': formalizacion.documento.url})
 
 
 def _observacion_version_divergente(firma):
@@ -1100,6 +1311,14 @@ def enviar_alerta_firma_pendiente(autoridad, lineamiento, pdf_bytes, nombre_pdf)
 
     from django.core.mail import EmailMessage
 
+    correos_staff = list(
+        Usuario.objects.filter(is_staff=True)
+        .exclude(email='')
+        .exclude(email=autoridad.correo)
+        .values_list('email', flat=True)
+        .distinct()
+    )
+
     asunto = f'Acción Requerida: Firma pendiente para Lineamiento Ticket #{lineamiento.ticket_principal}'
     cuerpo = (
         f'Estimado/a {autoridad.nombre_completo},\n\n'
@@ -1111,7 +1330,7 @@ def enviar_alerta_firma_pendiente(autoridad, lineamiento, pdf_bytes, nombre_pdf)
         'Este es un mensaje automático del Sistema de Lineamientos Técnicos.'
     )
     try:
-        email = EmailMessage(asunto, cuerpo, to=[autoridad.correo])
+        email = EmailMessage(asunto, cuerpo, to=[autoridad.correo], cc=correos_staff)
         email.attach(nombre_pdf, pdf_bytes, 'application/pdf')
         email.send(fail_silently=False)
         logger.info(
@@ -1141,7 +1360,7 @@ def _cerrar_ticket_padre_si_formalizado(formalizacion):
     lin = formalizacion.lineamiento
     tmp_dir = None
     try:
-        nombre_pdf = _nombre_pdf(lin.ticket_principal, temporal=False)
+        nombre_pdf = _nombre_pdf(lin.id_numerico, lin.ticket_principal, temporal=False)
         # IMPORTANTE: partir del documento YA firmado por los responsables
         # (formalizacion.documento), NO regenerar el PDF desde cero aqui -
         # _generar_pdf_lineamientos produce un PDF limpio sin ningun QR
@@ -1313,7 +1532,7 @@ def firmar_formalizacion_ajax(request, firma_id):
     else:
         llx, lly, pagina = _posicion_firma_pdf(lin, firma.detalle_id, tipos_incluir, total_paginas)
 
-    nombre_pdf = _nombre_pdf(lin.ticket_principal, temporal=False)
+    nombre_pdf = _nombre_pdf(lin.id_numerico, lin.ticket_principal, temporal=False)
 
     try:
         pdf_firmado = firmar_documento_acumulativo(
@@ -1383,6 +1602,9 @@ def generar_lineamiento_view(request, detalle_id):
     if detalle.tipo == 'bdd':
         qs = request.GET.urlencode()
         return redirect(f"/lineamiento/generar-bdd/{detalle_id}/" + (f"?{qs}" if qs else ""))
+    if detalle.tipo == 'infraestructura':
+        qs = request.GET.urlencode()
+        return redirect(f"/lineamiento/generar-capacidad/{detalle_id}/" + (f"?{qs}" if qs else ""))
     clave = f'chat_sw_{detalle_id}'
     if clave not in request.session:
         request.session[clave] = {'paso': 'inicio', 'info': {}, 'mensajes': []}
@@ -1452,6 +1674,20 @@ def finalizar_ajax(request, detalle_id):
     filas   = data.get('filas', [])
     modo    = data.get('modo', 'nuevo')
     ticket  = _limpiar_ticket(data.get('ticket', '')) or detalle.ticket_interno
+
+    if detalle.tipo == 'infraestructura':
+        hay_fila_con_datos = any(
+            (f.get('necesidad') or '').strip()
+            and (f.get('lineamiento') or '').strip()
+            and (f.get('mecanismo') or '').strip()
+            for f in filas
+        )
+        if not detalle.diagrama_personalizado and not hay_fila_con_datos:
+            return JsonResponse({
+                'ok': False,
+                'error': 'Debe completar al menos el diagrama de infraestructura o una fila de lineamiento con datos.',
+            })
+
     # Datos BDD opcionales
     bdd_sql       = data.get('bdd_sql', '')
     bdd_schema    = data.get('bdd_schema', '')
@@ -1508,7 +1744,7 @@ def finalizar_ajax(request, detalle_id):
             watermark=True, tipos_incluir=[detalle.tipo],
         )
         nombre_pdf = _nombre_pdf(
-            detalle.lineamiento.ticket_principal,
+            detalle.lineamiento.id_numerico, detalle.lineamiento.ticket_principal,
             tipos=[detalle.tipo], temporal=True,
         )
         tmp_dir = None
@@ -1537,7 +1773,7 @@ def finalizar_ajax(request, detalle_id):
             watermark=True, tipos_incluir=[detalle.tipo],
         )
         nombre_pdf = _nombre_pdf(
-            detalle.lineamiento.ticket_principal,
+            detalle.lineamiento.id_numerico, detalle.lineamiento.ticket_principal,
             tipos=[detalle.tipo], temporal=True,
         )
         tmp_dir = None
@@ -1596,9 +1832,9 @@ def descargar_pdf_solicitud(request, lineamiento_id):
         resp = HttpResponse(buf.read(), content_type='application/pdf')
         if es_temporal:
             tipos_finalizados = [d.tipo for d in detalles if d.finalizado]
-            nombre_pdf = _nombre_pdf(lin.ticket_principal, tipos=tipos_finalizados, temporal=True)
+            nombre_pdf = _nombre_pdf(lin.id_numerico, lin.ticket_principal, tipos=tipos_finalizados, temporal=True)
         else:
-            nombre_pdf = _nombre_pdf(lin.ticket_principal, temporal=False)
+            nombre_pdf = _nombre_pdf(lin.id_numerico, lin.ticket_principal, temporal=False)
         resp['Content-Disposition'] = f'attachment; filename="{nombre_pdf}"'
         return resp
     except Exception as e:
@@ -1627,7 +1863,7 @@ def _crear_formalizacion_si_no_existe(lin, version_map, usuario):
 
     try:
         buf = _generar_pdf_lineamientos(lin, version_map, watermark=False)
-        nombre_pdf = _nombre_pdf(lin.ticket_principal, temporal=False)
+        nombre_pdf = _nombre_pdf(lin.id_numerico, lin.ticket_principal, temporal=False)
         formalizacion = Formalizacion.objects.create(
             lineamiento=lin,
             version_map=version_map_normalizado,
@@ -1763,7 +1999,7 @@ def editar_solicitud_view(request, lineamiento_id):
             })
         for d in nuevos:
             LineamientoDetalle.objects.create(lineamiento=lin, **d)
-        return redirect('home')
+        return redirect('tickets_asignadas')
     return render(request, 'editar_solicitud.html', {
         'lin': lin, 'detalles_existentes': detalles_existentes,
         'tipos_disponibles': tipos_disponibles,
@@ -1795,9 +2031,11 @@ def crear_lineamiento_view(request):
     usuarios_infraestructura = _con_carga_laboral(Usuario.objects.filter(roles__contains='infraestructura', is_active=True)).order_by('first_name', 'username')
     if request.method == 'POST':
         ticket_principal    = _limpiar_ticket(request.POST.get('ticket_principal', ''))
+        id_numerico         = request.POST.get('id_numerico', '').strip()
         tipos_seleccionados = request.POST.getlist('tipos')
         errores = []; detalles_validos = []
         if not ticket_principal: errores.append('Ingrese el ticket principal.')
+        if not id_numerico: errores.append('Ingrese el ID numérico del documento.')
         if not tipos_seleccionados: errores.append('Seleccione al menos un tipo.')
         for tipo in tipos_seleccionados:
             ticket_hijo = _limpiar_ticket(request.POST.get(f'ticket_hijo_{tipo}', ''))
@@ -1809,13 +2047,16 @@ def crear_lineamiento_view(request):
             detalles_validos.append({'tipo': tipo, 'ticket_interno': ticket_hijo, 'usuario_asignado': usuario})
         if errores:
             return render(request, 'crear_lineamiento.html', {
-                'ticket_principal': ticket_principal, 'usuarios_software': usuarios_software,
+                'ticket_principal': ticket_principal, 'id_numerico': id_numerico,
+                'usuarios_software': usuarios_software,
                 'usuarios_bdd': usuarios_bdd, 'usuarios_infraestructura': usuarios_infraestructura, 'errores': errores,
             })
-        lin = Lineamiento.objects.create(ticket_principal=ticket_principal, creado_por=request.user)
+        lin = Lineamiento.objects.create(
+            ticket_principal=ticket_principal, id_numerico=id_numerico, creado_por=request.user,
+        )
         for d in detalles_validos:
             LineamientoDetalle.objects.create(lineamiento=lin, **d)
-        return redirect('home')
+        return redirect('tickets_asignadas')
     return render(request, 'crear_lineamiento.html', {
         'ticket_principal':         _limpiar_ticket(request.GET.get('ticket', '')),
         'usuarios_software':        usuarios_software,

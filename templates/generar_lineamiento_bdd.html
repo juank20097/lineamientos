@@ -796,8 +796,8 @@
         })})
       .then(r=>r.json())
       .then(data=>{
-        if(data.ok) window.location.href='/';
-        else if(data.bloqueado){ alert(data.error); window.location.href='/'; }
+        if(data.ok) window.location.href='/tickets/mis-tickets/';
+        else if(data.bloqueado){ alert(data.error); window.location.href='/tickets/mis-tickets/'; }
         else{ocultarLoading();btn.disabled=false;alert('Error al guardar: '+(data.error||'desconocido'));}
       })
       .catch(()=>{ocultarLoading();btn.disabled=false;alert('Error de conexion.');});

@@ -1,0 +1,309 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Lineamiento Infraestructura - IESS</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
+  <style>
+    :root{--inf:#FF6347;--inf-l:#fff1ee;--topbar-h:56px;--infobar-h:44px;}
+    *{box-sizing:border-box;margin:0;padding:0;}
+    body{font-family:'Segoe UI',sans-serif;background:#f0f2f5;height:100vh;display:flex;flex-direction:column;overflow:hidden;}
+    .topbar{height:var(--topbar-h);background:var(--inf);display:flex;align-items:center;padding:0 20px;box-shadow:0 2px 8px rgba(0,0,0,.18);flex-shrink:0;}
+    .topbar-brand{color:#fff;font-size:1rem;font-weight:700;display:flex;align-items:center;gap:10px;text-decoration:none;}
+    .topbar-right{margin-left:auto;display:flex;align-items:center;gap:14px;}
+    .user-badge{background:rgba(255,255,255,.15);color:#fff;border-radius:20px;padding:3px 12px;font-size:.8rem;display:flex;align-items:center;gap:6px;}
+    .rol-chip{background:rgba(255,255,255,.2);border-radius:10px;padding:2px 8px;font-size:.74rem;text-transform:uppercase;letter-spacing:.5px;}
+    .btn-logout{background:rgba(255,255,255,.15);border:1px solid rgba(255,255,255,.3);color:#fff;border-radius:7px;padding:4px 12px;font-size:.82rem;text-decoration:none;display:flex;align-items:center;gap:5px;}
+    .info-bar{height:var(--infobar-h);background:#fff;border-bottom:1px solid #e2e8f0;padding:0 20px;display:flex;align-items:center;gap:14px;font-size:.82rem;flex-shrink:0;}
+    .chip{background:var(--inf-l);border-radius:20px;padding:3px 10px;font-size:.75rem;color:var(--inf);font-weight:600;}
+    .workspace{display:flex;flex:1;overflow:hidden;}
+
+    /* Left panel: solo Diagrama de Infraestructura */
+    .left-panel{width:50%;display:flex;flex-direction:column;border-right:1px solid #e2e8f0;background:#fff;overflow:hidden;}
+    .panel-header{padding:10px 16px;border-bottom:1px solid #e8ecf0;flex-shrink:0;}
+    .panel-header h6{margin:0;font-size:.88rem;font-weight:700;color:var(--inf);}
+    .diagrama-toolbar{display:flex;align-items:center;gap:6px;padding:8px 12px;background:#fafafa;border-bottom:1px solid #e2e8f0;flex-shrink:0;}
+    .zoom-btn{background:#fff;border:1px solid #e2e8f0;border-radius:6px;padding:4px 10px;cursor:pointer;font-size:.8rem;color:#374151;}
+    .zoom-btn:hover{background:var(--inf-l);border-color:var(--inf);color:var(--inf);}
+
+    .diagrama-zone{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;overflow:auto;background:#f8fafc;position:relative;}
+    .upload-box{border:2.5px dashed #cbd5e1;border-radius:14px;padding:40px 32px;cursor:pointer;transition:all .2s;background:#f8fafc;width:100%;max-width:420px;text-align:center;}
+    .upload-box:hover{border-color:var(--inf);}
+    .upload-box i{font-size:2.5rem;color:#94a3b8;margin-bottom:12px;display:block;}
+    .upload-box p{color:#6b7280;font-size:.92rem;margin:0;}
+    .upload-box .hint{color:#94a3b8;font-size:.8rem;margin-top:6px;display:block;}
+    #imgDiagrama{display:none;max-width:100%;max-height:100%;object-fit:contain;}
+    .btn-restaurar{display:none;margin-top:10px;background:none;border:1px solid #fecaca;color:#dc2626;border-radius:7px;padding:5px 14px;font-size:.8rem;cursor:pointer;}
+
+    /* Right panel: identico a BDD */
+    .right-panel{flex:1;display:flex;flex-direction:column;overflow:hidden;background:#fff;}
+    .preview-head{padding:10px 16px;border-bottom:1px solid #e8ecf0;display:flex;align-items:center;gap:10px;flex-shrink:0;}
+    .preview-head h6{margin:0;font-size:.88rem;font-weight:700;}
+    .preview-count{font-size:.75rem;color:#94a3b8;}
+    .btn-finalizar{display:flex;margin-left:auto;background:var(--inf);color:#fff;border:none;border-radius:7px;padding:6px 16px;font-size:.8rem;font-weight:700;cursor:pointer;align-items:center;gap:6px;}
+    .btn-finalizar:disabled{background:#cbd5e1;color:#94a3b8;cursor:not-allowed;}
+    .preview-wrap{flex:1;overflow:auto;}
+    .doc-table{border-collapse:collapse;width:100%;font-size:.75rem;min-width:900px;}
+    .doc-table thead tr{background:var(--inf);color:#fff;}
+    .doc-table thead th{padding:8px 6px;text-align:center;font-weight:700;border:1px solid #b23a24;font-size:.72rem;}
+    .doc-table tbody td{border:1px solid #d1d5db;padding:6px;vertical-align:top;}
+    .doc-table td.num{text-align:center;font-weight:700;color:#475569;width:32px;}
+    .doc-table td.tipo{text-align:center;color:var(--inf);font-weight:700;width:40px;}
+    .doc-table td.fecha{text-align:center;color:#64748b;white-space:nowrap;width:80px;}
+    .td-acc{width:36px;text-align:center;vertical-align:middle!important;}
+    .btn-del{background:none;border:none;color:#e2e8f0;cursor:pointer;padding:2px 5px;border-radius:5px;font-size:.85rem;}
+    .btn-del:hover{color:#ef4444;background:#fef2f2;}
+    [contenteditable="true"]{outline:none;border-radius:4px;min-height:20px;white-space:pre-wrap;word-break:break-word;}
+    [contenteditable="true"]:focus{background:#f1f5f9;box-shadow:inset 0 0 0 1.5px var(--inf);}
+    .empty-preview{display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;color:#cbd5e1;text-align:center;padding:32px;}
+    .empty-preview i{font-size:3rem;margin-bottom:12px;}
+
+    #loading-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:9999;flex-direction:column;align-items:center;justify-content:center;gap:16px;}
+    #loading-overlay .spinner-border{width:3rem;height:3rem;color:#fff;}
+    #loading-overlay p{color:#fff;font-size:1rem;font-weight:500;margin:0;}
+  </style>
+</head>
+<body>
+  <div id="loading-overlay">
+    <div class="spinner-border" role="status"></div>
+    <p id="loading-msg">Procesando...</p>
+    <small style="color:rgba(255,255,255,.7);font-size:.82rem;">Por favor espere</small>
+  </div>
+
+  <nav class="topbar">
+    <a href="{% url 'home' %}" class="topbar-brand"><i class="bi bi-hdd-network-fill me-1"></i> LINEAMIENTO INFRAESTRUCTURA &mdash; SDNAS</a>
+    <div class="topbar-right">
+      <div class="user-badge"><i class="bi bi-person-circle"></i>{{ request.user.get_full_name|default:request.user.username }}<span class="rol-chip">{{ request.user.get_rol_display }}</span></div>
+      <a href="{% url 'logout' %}" class="btn-logout"><i class="bi bi-box-arrow-right"></i> Salir</a>
+    </div>
+  </nav>
+
+  <div class="info-bar">
+    <a href="{% url 'home' %}" style="color:#64748b;text-decoration:none;font-size:.8rem;"><i class="bi bi-arrow-left me-1"></i>Inicio</a>
+    <span class="chip"><i class="bi bi-ticket-detailed me-1"></i>#{{ detalle.lineamiento.ticket_principal }}</span>
+    <span class="chip"><i class="bi bi-ticket me-1"></i>#{{ detalle.ticket_interno }}</span>
+    <span class="chip"><i class="bi bi-hdd-network me-1"></i>Capacidad</span>
+    {% if modo != 'nuevo' %}<span class="chip" style="background:#fef9ec;color:#92400e;">{% if modo == 'actualizar' %}Actualizando{% else %}Nueva versión{% endif %}{% if ticket_nv %} · #{{ ticket_nv }}{% endif %}</span>{% endif %}
+  </div>
+
+  <div class="workspace">
+    <div class="left-panel">
+      <div class="panel-header">
+        <h6><i class="bi bi-diagram-3 me-1"></i>Diagrama de Infraestructura</h6>
+      </div>
+      <div class="diagrama-toolbar">
+        <input type="file" id="inputDiagramaImg" accept="image/*" style="display:none;">
+        <button class="zoom-btn" id="btnSubirDiagrama"><i class="bi bi-image me-1"></i>Subir imagen</button>
+        <button class="zoom-btn" id="btnRestaurarDiagrama" style="display:none;color:#dc2626;border-color:#fecaca;">
+          <i class="bi bi-trash3 me-1"></i>Quitar imagen
+        </button>
+      </div>
+      <div class="diagrama-zone" id="diagramaZone">
+        <div class="upload-box" id="uploadBox" onclick="document.getElementById('inputDiagramaImg').click()">
+          <i class="bi bi-hdd-network"></i>
+          <p><strong>Sube el diagrama de infraestructura/capacidad</strong></p>
+          <span class="hint">JPG o PNG</span>
+        </div>
+        <img id="imgDiagrama">
+      </div>
+    </div>
+
+    <!-- Right panel -->
+    <div class="right-panel">
+      <div class="preview-head">
+        <h6><i class="bi bi-file-earmark-spreadsheet me-1" style="color:var(--inf);"></i>Lineamientos Infraestructura</h6>
+        <span class="preview-count" id="previewCount">0 lineamientos</span>
+        <button class="btn-finalizar" id="btnFinalizar" disabled title="Complete al menos el diagrama o una fila de lineamiento">
+          <i class="bi bi-check2-circle"></i>
+          {% if modo == 'actualizar' %}Guardar Cambios{% elif modo == 'nueva_version' %}Guardar Nueva Versión{% else %}Finalizar{% endif %}
+        </button>
+      </div>
+      <div class="preview-wrap">
+        <div class="empty-preview" id="emptyState">
+          <i class="bi bi-hdd-network" style="color:#cbd5e1;"></i>
+          <p>Agrega una fila para comenzar a registrar los lineamientos.</p>
+          <button id="btnAddRowInicial" style="background:var(--inf);border:none;color:#fff;border-radius:7px;padding:8px 20px;font-size:.85rem;font-weight:600;cursor:pointer;display:flex;align-items:center;gap:8px;">
+            <i class="bi bi-plus-lg"></i> Añadir fila
+          </button>
+        </div>
+        <table class="doc-table" id="docTable" style="display:none;">
+          <thead>
+            <tr><th>#</th><th>Responsable</th><th>Tipo</th><th>Necesidad</th><th>Lineamiento</th><th>Mecanismo de Implementación</th><th>Fecha</th><th>Observación</th><th></th></tr>
+          </thead>
+          <tbody id="docBody"></tbody>
+          <tfoot>
+            <tr><td colspan="9" style="padding:6px 10px;border:1px solid #d1d5db;">
+              <button id="btnAddRow" style="background:none;border:1.5px dashed #94a3b8;color:#64748b;border-radius:7px;padding:4px 14px;font-size:.75rem;cursor:pointer;display:flex;align-items:center;gap:6px;">
+                <i class="bi bi-plus-lg"></i> Agregar fila en blanco
+              </button>
+            </td></tr>
+          </tfoot>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+  <script>
+    const CSRF          = '{{ csrf_token }}';
+    const DIAGRAMA_URL  = '{% url "diagrama_personalizado" detalle.pk %}';
+    const FINALIZAR_URL = '{% url "finalizar_lineamiento" detalle.pk %}';
+    const DIAGRAMA_PERSONALIZADO_URL = '{{ diagrama_personalizado_url }}';
+    const RESPONSABLE   = '{{ request.user.get_full_name|default:request.user.username }}';
+    const HOY           = new Date().toLocaleDateString('es-EC',{day:'2-digit',month:'2-digit',year:'numeric'});
+    const MODO          = '{{ modo }}';
+    const TICKET_NV     = '{{ ticket_nv }}';
+    const FILAS_PRECARGA = {{ filas_precarga|safe }};
+
+    function mostrarLoading(msg){ document.getElementById('loading-msg').textContent=msg||'Procesando...'; document.getElementById('loading-overlay').style.display='flex'; }
+    function ocultarLoading(){ document.getElementById('loading-overlay').style.display='none'; }
+
+    // ── VALIDACION: el boton Finalizar requiere imagen O al menos una fila
+    // con datos completos (necesidad + lineamiento + mecanismo, no vacios) ──
+    let tieneImagen = false;
+    const btnFinalizar = document.getElementById('btnFinalizar');
+
+    function tieneFilasConDatos(){
+      return [...document.querySelectorAll('#docBody tr')].some(tr=>{
+        const c = tr.querySelectorAll('td');
+        return c[3].innerText.trim() && c[4].innerText.trim() && c[5].innerText.trim();
+      });
+    }
+
+    function validarFormularioInfraestructura(){
+      const valido = tieneImagen || tieneFilasConDatos();
+      btnFinalizar.disabled = !valido;
+    }
+
+    // ── DIAGRAMA (imagen subida por el usuario) ──
+    const uploadBox            = document.getElementById('uploadBox');
+    const imgDiagrama          = document.getElementById('imgDiagrama');
+    const btnSubirDiagrama     = document.getElementById('btnSubirDiagrama');
+    const btnRestaurarDiagrama = document.getElementById('btnRestaurarDiagrama');
+    const inputDiagramaImg     = document.getElementById('inputDiagramaImg');
+
+    function mostrarDiagrama(url){
+      imgDiagrama.src = url;
+      imgDiagrama.style.display = 'block';
+      uploadBox.style.display = 'none';
+      btnRestaurarDiagrama.style.display = 'inline-flex';
+      tieneImagen = true;
+      validarFormularioInfraestructura();
+    }
+    function ocultarDiagrama(){
+      imgDiagrama.style.display = 'none';
+      imgDiagrama.src = '';
+      uploadBox.style.display = 'block';
+      btnRestaurarDiagrama.style.display = 'none';
+      tieneImagen = false;
+      validarFormularioInfraestructura();
+    }
+
+    if(DIAGRAMA_PERSONALIZADO_URL){ mostrarDiagrama(DIAGRAMA_PERSONALIZADO_URL); }
+
+    btnSubirDiagrama.addEventListener('click', ()=> inputDiagramaImg.click());
+
+    inputDiagramaImg.addEventListener('change', ()=>{
+      const file = inputDiagramaImg.files[0];
+      if(!file) return;
+      mostrarDiagrama(URL.createObjectURL(file));
+      const fd = new FormData();
+      fd.append('imagen', file);
+      fetch(DIAGRAMA_URL, {method:'POST', headers:{'X-CSRFToken':CSRF}, body: fd})
+        .then(r=>r.json())
+        .then(data=>{
+          if(!data.ok){ alert('Error al guardar la imagen: '+(data.error||'desconocido')); return; }
+          mostrarDiagrama(data.url);
+        })
+        .catch(()=> alert('Error de conexion al guardar la imagen.'));
+    });
+
+    btnRestaurarDiagrama.addEventListener('click', ()=>{
+      if(!confirm('¿Quitar la imagen del diagrama de infraestructura?')) return;
+      const fd = new FormData();
+      fd.append('restaurar', 'true');
+      fetch(DIAGRAMA_URL, {method:'POST', headers:{'X-CSRFToken':CSRF}, body: fd})
+        .then(r=>r.json())
+        .then(data=>{
+          if(!data.ok){ alert('Error al quitar la imagen: '+(data.error||'desconocido')); return; }
+          ocultarDiagrama();
+          inputDiagramaImg.value = '';
+        })
+        .catch(()=> alert('Error de conexion.'));
+    });
+
+    // ── LINEAMIENTOS (panel derecho) ──
+    const docBody    = document.getElementById('docBody');
+    const docTable   = document.getElementById('docTable');
+    const emptyState = document.getElementById('emptyState');
+
+    function renumerar(){
+      [...docBody.querySelectorAll('tr')].forEach((tr,i)=>tr.querySelector('.num').textContent=i+1);
+      document.getElementById('previewCount').textContent=`${docBody.children.length} lineamiento${docBody.children.length!==1?'s':''}`;
+      validarFormularioInfraestructura();
+    }
+
+    function crearFila(g){
+      const tr=document.createElement('tr');
+      tr.innerHTML=`
+        <td class="num"></td><td>${RESPONSABLE}</td><td class="tipo">INF</td>
+        <td contenteditable="true">${g?.necesidad??''}</td>
+        <td contenteditable="true">${g?.lineamiento??''}</td>
+        <td contenteditable="true">${g?.mecanismo??''}</td>
+        <td class="fecha">${HOY}</td>
+        <td contenteditable="true">${g?.observacion??''}</td>
+        <td class="td-acc"><button class="btn-del"><i class="bi bi-trash3"></i></button></td>`;
+      tr.querySelector('.btn-del').addEventListener('click',()=>{
+        tr.style.transition='opacity .2s'; tr.style.opacity='0';
+        setTimeout(()=>{tr.remove();renumerar();},200);
+      });
+      return tr;
+    }
+
+    // Delegacion: cualquier edicion de celda (necesidad/lineamiento/mecanismo)
+    // revalida si el boton Finalizar puede habilitarse.
+    docBody.addEventListener('input', validarFormularioInfraestructura);
+
+    function agregarFilaVacia(){
+      emptyState.style.display='none'; docTable.style.display='table';
+      docBody.appendChild(crearFila(null)); renumerar();
+    }
+    document.getElementById('btnAddRow').addEventListener('click', agregarFilaVacia);
+    document.getElementById('btnAddRowInicial').addEventListener('click', agregarFilaVacia);
+
+    // Precargar filas en modo actualizar/nueva_version
+    if(FILAS_PRECARGA.length > 0){
+      FILAS_PRECARGA.forEach(f=>docBody.appendChild(crearFila(f)));
+      emptyState.style.display='none';
+      docTable.style.display='table';
+      renumerar();
+    }
+
+    // ── FINALIZAR ──
+    document.getElementById('btnFinalizar').addEventListener('click',()=>{
+      if(!tieneImagen && !tieneFilasConDatos()){
+        alert('Complete al menos el diagrama de infraestructura o una fila de lineamiento.');
+        return;
+      }
+      const filas=[...docBody.querySelectorAll('tr')].map(tr=>{
+        const c=tr.querySelectorAll('td');
+        return {necesidad:c[3].innerText,lineamiento:c[4].innerText,mecanismo:c[5].innerText,observacion:c[7].innerText};
+      });
+      const btn=document.getElementById('btnFinalizar');
+      btn.disabled=true; btn.innerHTML='<span class="spinner-border spinner-border-sm me-1"></span> Guardando...';
+      mostrarLoading('Guardando lineamiento y cerrando ticket en Znuny...');
+      fetch(FINALIZAR_URL,{method:'POST',headers:{'Content-Type':'application/json','X-CSRFToken':CSRF},
+        body:JSON.stringify({ filas, modo:MODO, ticket:TICKET_NV })})
+      .then(r=>r.json())
+      .then(data=>{
+        if(data.ok) window.location.href='/tickets/mis-tickets/';
+        else if(data.bloqueado){ alert(data.error); window.location.href='/tickets/mis-tickets/'; }
+        else{ocultarLoading();btn.disabled=false;alert('Error al guardar: '+(data.error||'desconocido'));}
+      })
+      .catch(()=>{ocultarLoading();btn.disabled=false;alert('Error de conexion.');});
+    });
+  </script>
+</body>
+</html>

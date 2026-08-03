@@ -132,6 +132,19 @@
         <i class="bi bi-file-earmark-ruled-fill" style="font-size:1.2rem"></i>
         <h5>Nuevo Lineamiento</h5>
         <div class="ms-auto d-flex align-items-center gap-2">
+          <label for="idNumericoInput" class="mb-0" style="font-size:0.85rem; opacity:0.85;">ID Numérico:</label>
+          <input
+            type="text"
+            id="idNumericoInput"
+            name="id_numerico"
+            form="formLineamiento"
+            class="form-control form-control-sm"
+            placeholder="Ej: 001"
+            value="{{ id_numerico }}"
+            autocomplete="off"
+            required
+            style="font-family:monospace; font-size:0.88rem; width:110px; background:rgba(255,255,255,0.15); color:#fff; border-color:rgba(255,255,255,0.4);"
+          >
           <label for="ticketPrincipalInput" class="mb-0" style="font-size:0.85rem; opacity:0.85;">Ticket Principal:</label>
           <input
             type="text"
@@ -142,6 +155,7 @@
             placeholder="Ej: Ticket#2026... o solo el numero"
             value="{{ ticket_principal }}"
             autocomplete="off"
+            required
             style="font-family:monospace; font-size:0.88rem; width:260px; background:rgba(255,255,255,0.15); color:#fff; border-color:rgba(255,255,255,0.4);"
           >
         </div>

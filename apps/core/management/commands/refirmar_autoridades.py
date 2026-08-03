@@ -46,7 +46,7 @@ class Command(BaseCommand):
 
         lin = formalizacion.lineamiento
 
-        nombre_pdf = _nombre_pdf(lin.ticket_principal, temporal=False)
+        nombre_pdf = _nombre_pdf(lin.id_numerico, lin.ticket_principal, temporal=False)
         # Partir del documento YA firmado por los responsables, no regenerar
         # el PDF desde cero (eso produciria un PDF limpio sin ningun QR y
         # perderia la firma de "Elaborado por").

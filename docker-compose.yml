@@ -1,0 +1,60 @@
+services:
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    env_file:
+      - .env.production
+    environment:
+      DJANGO_DEBUG: "False"
+    volumes:
+      - media_volume:/app/media
+      - static_volume:/app/staticfiles
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - internal
+    expose:
+      - "8000"
+
+  db:
+    image: postgres:15-alpine
+    restart: unless-stopped
+    env_file:
+      - .env.production
+    volumes:
+      - db_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U \"$$POSTGRES_USER\" -d \"$$POSTGRES_DB\""]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    networks:
+      - internal
+
+  nginx:
+    image: nginx:1.27-alpine
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      # - "443:443"   # habilitar junto con la config SSL en nginx/conf.d
+    volumes:
+      - ./nginx/conf.d:/etc/nginx/conf.d:ro
+      - static_volume:/app/staticfiles:ro
+      - media_volume:/app/media:ro
+      # - ./nginx/certs:/etc/nginx/certs:ro   # certificados SSL, si se habilita 443
+    depends_on:
+      - web
+    networks:
+      - internal
+
+volumes:
+  media_volume:
+  static_volume:
+  db_data:
+
+networks:
+  internal:
+    driver: bridge
