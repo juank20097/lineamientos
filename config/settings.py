@@ -7,6 +7,11 @@ SECRET_KEY = config('DJANGO_SECRET_KEY')
 DEBUG = config('DJANGO_DEBUG', default=False, cast=bool)
 ALLOWED_HOSTS = config('DJANGO_ALLOWED_HOSTS', default='localhost').split(',')
 
+# Subruta bajo la que se expone la app detras de un proxy compartido (ej.
+# "/tools/lineamientos", igual que OpenProject). Vacio = se sirve en la raiz.
+FORCE_SCRIPT_NAME = config('DJANGO_FORCE_SCRIPT_NAME', default='') or None
+USE_X_FORWARDED_HOST = bool(FORCE_SCRIPT_NAME)
+
 INSTALLED_APPS = [
     'django.contrib.admin',
     'django.contrib.auth',
@@ -74,19 +79,30 @@ TIME_ZONE = 'America/Guayaquil'
 USE_I18N = True
 USE_TZ = True
 
-STATIC_URL = '/static/'
+STATIC_URL = (FORCE_SCRIPT_NAME or '') + '/static/'
 STATICFILES_DIRS = [BASE_DIR / 'static']
 STATIC_ROOT = BASE_DIR / 'staticfiles'
 
-MEDIA_URL = '/media/'
+# MEDIA_URL/MEDIA_ROOT ya no se usan para servir archivos de usuario (ver
+# apps/core/storage.py: diagramas/PDFs/certificados viven en Postgres como
+# BLOB), pero se dejan por si algun paquete de terceros los referencia.
+MEDIA_URL = (FORCE_SCRIPT_NAME or '') + '/media/'
 MEDIA_ROOT = BASE_DIR / 'media'
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 # Auth
-LOGIN_URL = '/'
-LOGIN_REDIRECT_URL = '/home/'
-LOGOUT_REDIRECT_URL = '/'
+# Se usan nombres de URL (no rutas literales) porque Django los resuelve via
+# resolve_url()/reverse(), que si respeta FORCE_SCRIPT_NAME; una ruta como
+# '/' quedaria fija en la raiz del dominio y rompe el logout/login cuando la
+# app esta detras de un prefijo (ej. /tools/lineamientos/).
+LOGIN_URL = 'login'
+LOGIN_REDIRECT_URL = 'home'
+LOGOUT_REDIRECT_URL = 'login'
+
+if FORCE_SCRIPT_NAME:
+    CSRF_COOKIE_PATH = FORCE_SCRIPT_NAME
+    SESSION_COOKIE_PATH = FORCE_SCRIPT_NAME
 
 # Playwright
 ZNUNY_PYTHON = config('ZNUNY_PYTHON', default='python')
