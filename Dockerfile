@@ -8,7 +8,7 @@ WORKDIR /app
 
 # Dependencias de sistema para psycopg2 (compilacion) y Playwright (fuentes,
 # render de PDF/paginas, librerias graficas que Chromium necesita en runtime).
-RUN apt-get update && apt-get install -y --no-install-recursive \
+RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
     libpq-dev \
     curl \
@@ -33,11 +33,27 @@ RUN apt-get update && apt-get install -y --no-install-recursive \
     && rm -rf /var/lib/apt/lists/*
 
 COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+# NOTA: --trusted-host evita la verificacion SSL de pip porque la red de
+# desarrollo intercepta TLS con un certificado propio (proxy corporativo),
+# lo que rompe la verificacion normal contra pypi.org. Es un ajuste temporal
+# solo para build local; en un entorno con CA corporativa instalada
+# correctamente esto deberia quitarse.
+RUN pip install --no-cache-dir \
+    --trusted-host pypi.org \
+    --trusted-host files.pythonhosted.org \
+    --trusted-host pypi.python.org \
+    -r requirements.txt
 
-# Instala los navegadores de Playwright (Chromium) y sus dependencias de
-# sistema adicionales, usados por znuny/ para automatizar OTRS.
-RUN playwright install --with-deps chromium
+# Instala el navegador Chromium de Playwright, usado por znuny/ para
+# automatizar OTRS. No se usa --with-deps: los paquetes que necesita
+# (libnss3, libgbm1, fonts-liberation, etc.) ya se instalaron arriba a mano,
+# porque --with-deps referencia nombres de paquete de Ubuntu (ttf-unifont,
+# ttf-ubuntu-font-family) que no existen en Debian trixie.
+# NODE_TLS_REJECT_UNAUTHORIZED=0 es necesario solo aqui porque el instalador
+# de Playwright usa Node (no pip) para descargar los binarios, y la red de
+# desarrollo intercepta TLS con un certificado autofirmado (mismo problema
+# que --trusted-host resuelve para pip mas arriba).
+RUN NODE_TLS_REJECT_UNAUTHORIZED=0 playwright install chromium
 
 COPY . .
 

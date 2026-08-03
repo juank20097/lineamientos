@@ -2,6 +2,7 @@ import base64
 import json
 import logging
 import math
+import mimetypes
 import os
 import shutil
 import subprocess
@@ -17,7 +18,7 @@ from datetime import date
 from django.conf import settings
 from django.contrib.auth.decorators import login_required
 from django.core.files.base import ContentFile
-from django.http import JsonResponse, HttpResponse
+from django.http import JsonResponse, HttpResponse, FileResponse, Http404
 from django.shortcuts import render, redirect, get_object_or_404
 from django.urls import reverse
 from django.utils import timezone
@@ -27,13 +28,28 @@ from apps.usuarios.models import Usuario
 from .models import (
     Lineamiento, LineamientoDetalle, Guideline,
     LineamientoGenerado, LineamientoGeneradoFila,
-    Formalizacion, FormalizacionFirma, Autoridad,
+    Formalizacion, FormalizacionFirma, Autoridad, ArchivoBlob,
 )
 from .utils import (
     generar_id_lote, FirmaECError, firmar_documento_acumulativo,
 )
 
 logger = logging.getLogger(__name__)
+
+
+@login_required
+def servir_archivo_blob(request, blob_id):
+    """Sirve un archivo (diagrama, PDF de Formalizacion, certificado .p12)
+    guardado como BLOB en Postgres (ver apps/core/storage.py). Reemplaza el
+    .url que Django genera para FileField/ImageField en storage de
+    filesystem, ya que un BLOB no tiene una ruta servible directamente."""
+    blob = get_object_or_404(ArchivoBlob, pk=blob_id)
+    content_type = mimetypes.guess_type(blob.nombre_original)[0] or 'application/octet-stream'
+    return FileResponse(
+        BytesIO(bytes(blob.contenido)), content_type=content_type,
+        filename=os.path.basename(blob.nombre_original),
+    )
+
 
 BASE_DIR               = Path(settings.BASE_DIR)
 ZNUNY_SCRIPT_VERIFICAR = BASE_DIR / 'znuny' / 'verificacion_ticket.py'
@@ -422,7 +438,7 @@ def _generar_pdf_lineamientos(lin, version_map, watermark=False, tipos_incluir=N
                 # Imagen personalizada subida por el usuario, escalada para que quepa en la pagina
                 AVAIL_W = PAGE_W - 2 * MARGIN
                 AVAIL_H = PAGE_H - 7 * cm
-                img = RLImage(bdd_detalle.diagrama_personalizado.path)
+                img = RLImage(BytesIO(bdd_detalle.diagrama_personalizado.read()))
                 scale = min(AVAIL_W / img.imageWidth, AVAIL_H / img.imageHeight, 1.0)
                 img.drawWidth  = img.imageWidth * scale
                 img.drawHeight = img.imageHeight * scale
@@ -546,7 +562,7 @@ def _generar_pdf_lineamientos(lin, version_map, watermark=False, tipos_incluir=N
 
         AVAIL_W = PAGE_W - 2 * MARGIN
         AVAIL_H = PAGE_H - 7 * cm
-        img = RLImage(infra_detalle.diagrama_personalizado.path)
+        img = RLImage(BytesIO(infra_detalle.diagrama_personalizado.read()))
         scale = min(AVAIL_W / img.imageWidth, AVAIL_H / img.imageHeight, 1.0)
         img.drawWidth  = img.imageWidth * scale
         img.drawHeight = img.imageHeight * scale

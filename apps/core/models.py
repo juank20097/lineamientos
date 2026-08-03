@@ -1,10 +1,36 @@
+import uuid
+
 from django.db import models
 from django.conf import settings
+
+from .storage import PostgresBlobStorage
+
+blob_storage = PostgresBlobStorage()
+
+
+class ArchivoBlob(models.Model):
+    """Contenido binario de un archivo subido (diagrama, PDF de
+    Formalizacion, certificado .p12), guardado en la base de datos en vez
+    de en el filesystem (media/). Los FileField/ImageField del proyecto
+    usan PostgresBlobStorage, que lee/escribe en esta tabla."""
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    nombre_original = models.CharField(max_length=255)
+    contenido = models.BinaryField()
+    tamano = models.PositiveIntegerField(default=0)
+    creado_en = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        verbose_name = 'Archivo (BLOB)'; verbose_name_plural = 'Archivos (BLOB)'
+
+    def __str__(self):
+        return self.nombre_original
 
 
 def _ruta_diagrama_personalizado(instance, filename):
     """Carpeta destino del diagrama segun el tipo del LineamientoDetalle
-    (BDD e Infraestructura ya no comparten la misma carpeta fisica)."""
+    (BDD e Infraestructura ya no comparten la misma carpeta fisica). Solo se
+    usa como parte del nombre_original guardado en ArchivoBlob; el storage
+    real (PostgresBlobStorage) ignora la ruta de disco."""
     carpeta = 'diagramas_infra' if instance.tipo == 'infraestructura' else 'diagramas_bdd'
     return f'{carpeta}/{filename}'
 
@@ -42,7 +68,7 @@ class LineamientoDetalle(models.Model):
         related_name='lineamientos_asignados'
     )
     diagrama_personalizado = models.ImageField(
-        upload_to=_ruta_diagrama_personalizado, null=True, blank=True,
+        upload_to=_ruta_diagrama_personalizado, storage=blob_storage, null=True, blank=True,
         verbose_name='Diagrama personalizado',
     )
 
@@ -128,7 +154,7 @@ class Formalizacion(models.Model):
         verbose_name='Versiones formalizadas',
         help_text='Mapa {detalle_id: generado_id} usado exactamente al momento de formalizar',
     )
-    documento = models.FileField(upload_to='formalizaciones/', verbose_name='PDF consolidado')
+    documento = models.FileField(upload_to='formalizaciones/', storage=blob_storage, verbose_name='PDF consolidado')
     creado_por = models.ForeignKey(
         settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True,
         related_name='formalizaciones_creadas',
@@ -227,7 +253,7 @@ class Autoridad(models.Model):
     )
     correo = models.EmailField(verbose_name='Correo electrónico', blank=True, default='')
     archivo_p12 = models.FileField(
-        upload_to='autoridades_p12/', verbose_name='Certificado (.p12)', blank=True, null=True,
+        upload_to='autoridades_p12/', storage=blob_storage, verbose_name='Certificado (.p12)', blank=True, null=True,
     )
     clave_p12 = models.CharField(
         max_length=255, verbose_name='Contraseña del certificado', blank=True, default='',
