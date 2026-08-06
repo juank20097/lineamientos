@@ -41,7 +41,7 @@ services:
         condition: service_healthy
     networks:
       - internal
-      - red-interna-sdnas
+      # - red-interna-sdnas
 
 volumes:
   media_volume:
@@ -50,5 +50,5 @@ volumes:
 networks:
   internal:
     driver: bridge
-  red-interna-sdnas:
-    external: true
+  # red-interna-sdnas:
+  #   external: true
