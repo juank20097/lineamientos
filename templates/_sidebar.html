@@ -135,7 +135,7 @@
   function mostrarLoadingSidebar(){ const el = document.getElementById('sidebar-loading-overlay'); if (el) el.style.display='flex'; }
   function ocultarLoadingSidebar(){ const el = document.getElementById('sidebar-loading-overlay'); if (el) el.style.display='none'; }
 
-  const znunyTimeoutMs = 30000; // si Znuny no responde en 30s, se cancela la espera y se activa el fallback manual
+  const znunyTimeoutMs = 60000; // si Znuny no responde en 60s, se cancela la espera y se activa el fallback manual
 
   function mostrarPasoAutoTicket(){
     document.getElementById('pasoAutoTicketPrincipal').style.display = 'block';

@@ -53,6 +53,11 @@ RUN pip install --no-cache-dir \
 # de Playwright usa Node (no pip) para descargar los binarios, y la red de
 # desarrollo intercepta TLS con un certificado autofirmado (mismo problema
 # que --trusted-host resuelve para pip mas arriba).
+# Ruta fija y compartida para los navegadores, independiente del usuario que
+# los descargue o los use en runtime (evita que queden en /root/.cache
+# mientras la app corre como appuser, que es lo que causaba
+# "Executable doesn't exist at /home/appuser/.cache/ms-playwright/...").
+ENV PLAYWRIGHT_BROWSERS_PATH=/opt/ms-playwright
 RUN NODE_TLS_REJECT_UNAUTHORIZED=0 playwright install chromium
 
 COPY . .
@@ -60,7 +65,7 @@ COPY . .
 RUN useradd --create-home --shell /bin/bash appuser \
     && mkdir -p /app/media /app/staticfiles \
     && chmod +x /app/scripts/entrypoint.sh \
-    && chown -R appuser:appuser /app
+    && chown -R appuser:appuser /app /opt/ms-playwright
 
 USER appuser
 

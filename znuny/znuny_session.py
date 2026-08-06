@@ -104,6 +104,33 @@ def _screenshot_debug(page, filename: str):
         pass
 
 
+def _sesion_caducada(page) -> bool:
+    """Detecta si la pagina actual es el formulario de login (sesion expirada
+    a mitad de una operacion, tras una navegacion posterior al login inicial)."""
+    try:
+        return page.locator('#User').count() > 0 or 'Action=Login' in page.url
+    except Exception:
+        return False
+
+
+def reautenticar(page):
+    """Fuerza un nuevo login cuando se detecta sesion caducada en pleno script
+    (no al inicio, donde ya lo cubre ZnunySession.__enter__). Borra la sesion
+    en disco para no reutilizar cookies invalidas en la proxima ejecucion."""
+    user, password, _ = _cargar_credenciales()
+    if not user or not password:
+        raise RuntimeError('ZNUNY_USER o ZNUNY_PASS no definidos en .env')
+    try:
+        SESSION_FILE.unlink(missing_ok=True)
+    except Exception:
+        pass
+    page.context.clear_cookies()
+    ok = _hacer_login(page, user, password)
+    if not ok:
+        raise RuntimeError('Re-login fallido en Znuny: credenciales incorrectas o pagina inesperada.')
+    page.context.storage_state(path=str(SESSION_FILE))
+
+
 class ZnunySession:
     """
     Context manager que maneja la sesion de Znuny.

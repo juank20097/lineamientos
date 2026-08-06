@@ -925,11 +925,12 @@ def validar_ticket_ajax(request):
     if not numero:
         return JsonResponse({'existe': False, 'error': 'Numero vacio'})
     # Timeout corto (coincide con el limite de espera del frontend, que a los
-    # 30s cancela la peticion y activa el fallback manual de ingreso de
+    # 60s cancela la peticion y activa el fallback manual de ingreso de
     # ticket): esta es solo una consulta, sin fallback no tiene sentido dejar
     # el proceso Playwright corriendo mucho mas alla de lo que el usuario
-    # ya dejo de esperar.
-    return JsonResponse(_run_script(ZNUNY_SCRIPT_VERIFICAR, [numero], timeout=30))
+    # ya dejo de esperar. 60s (en vez de 30s) da margen para un re-login
+    # automatico si la sesion de Znuny caduco a mitad de la consulta.
+    return JsonResponse(_run_script(ZNUNY_SCRIPT_VERIFICAR, [numero], timeout=60))
 
 
 @login_required

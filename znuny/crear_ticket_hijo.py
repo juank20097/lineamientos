@@ -19,7 +19,7 @@ import re
 import os
 from pathlib import Path
 from dotenv import load_dotenv
-from znuny_session import ZnunySession, URL_BASE, PlaywrightTimeout
+from znuny_session import ZnunySession, URL_BASE, PlaywrightTimeout, _sesion_caducada, reautenticar
 
 load_dotenv(Path(__file__).parent / '.env')
 
@@ -120,6 +120,11 @@ def crear_hijo(numero_padre: str, tipo: str, propietario_nombre: str):
             # IR AL TICKET PADRE
             page.goto(f'{URL}?Action=AgentTicketZoom;TicketNumber={numero_padre}', wait_until='networkidle')
             page.wait_for_timeout(1500)
+
+            if _sesion_caducada(page):
+                reautenticar(page)
+                page.goto(f'{URL}?Action=AgentTicketZoom;TicketNumber={numero_padre}', wait_until='networkidle')
+                page.wait_for_timeout(1500)
 
             if 'No TicketID is given!' in page.locator('body').inner_text():
                 salida({'creado': False, 'error': f'Ticket padre {numero_padre} no encontrado'})

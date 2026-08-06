@@ -13,7 +13,7 @@ Retorna JSON:
 import sys
 import json
 import re
-from znuny_session import ZnunySession
+from znuny_session import ZnunySession, _sesion_caducada, reautenticar
 
 URL = 'https://soporte.iess.gob.ec/otrs/index.pl'
 
@@ -31,6 +31,15 @@ def verificar_ticket(numero: str):
                 wait_until='networkidle',
             )
             page.wait_for_timeout(1000)
+
+            if _sesion_caducada(page):
+                reautenticar(page)
+                page.goto(
+                    f'{URL}?Action=AgentTicketZoom;TicketNumber={numero}',
+                    wait_until='networkidle',
+                )
+                page.wait_for_timeout(1000)
+
             body = page.locator('body').inner_text()
             existe = 'No TicketID is given!' not in body and 'No se encontr' not in body
             salida({'existe': existe, 'numero': numero})

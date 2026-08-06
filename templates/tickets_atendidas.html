@@ -239,6 +239,7 @@
   <script>
     const CSRF = '{{ csrf_token }}';
     function znunyUrl(numero){ return `{% ticket_url "___" %}`.replace('___', numero); }
+    function generarLineamientoUrl(pk){ return `{% url 'generar_lineamiento' 999999 %}`.replace('999999', pk); }
     function mostrarLoading(){ document.getElementById('loading-overlay').style.display='flex'; }
     function ocultarLoading(){ document.getElementById('loading-overlay').style.display='none'; }
 
@@ -398,7 +399,7 @@
         btnNV.innerHTML = '<i class="bi bi-search me-1"></i>Verificar y Continuar';
       }
 
-      const ZNUNY_TIMEOUT_MS = 30000; // si Znuny no responde en 30s, se cancela la espera y se activa el fallback manual
+      const ZNUNY_TIMEOUT_MS = 60000; // si Znuny no responde en 60s, se cancela la espera y se activa el fallback manual
 
       function mostrarPaso3ModalManual(numeroPrellenado){
         document.getElementById('paso2Modal').style.display = 'none';
@@ -420,7 +421,7 @@
 
       document.getElementById('btnElegirActualizar').addEventListener('click', () => {
         bootstrap.Modal.getInstance(modalEl).hide();
-        window.location.href = `/lineamiento/generar/${detalleActivo}/?modo=actualizar`;
+        window.location.href = `${generarLineamientoUrl(detalleActivo)}?modo=actualizar`;
       });
 
       document.getElementById('btnElegirNuevaVersion').addEventListener('click', () => {
@@ -460,7 +461,7 @@
           btnNV.innerHTML = '<i class="bi bi-search me-1"></i>Verificar y Continuar';
           if (data.existe){
             bootstrap.Modal.getInstance(modalEl).hide();
-            window.location.href = `/lineamiento/generar/${detalleActivo}/?modo=nueva_version&ticket=${encodeURIComponent(data.numero)}`;
+            window.location.href = `${generarLineamientoUrl(detalleActivo)}?modo=nueva_version&ticket=${encodeURIComponent(data.numero)}`;
           } else {
             // Znuny respondio pero no encontro el ticket: se ofrece el fallback manual.
             mostrarPaso3ModalManual(numero);
@@ -493,7 +494,7 @@
         if (!asunto){ msg.innerHTML = '<span class="text-danger">Ingrese el asunto del ticket.</span>'; return; }
         if (!solicitante){ msg.innerHTML = '<span class="text-danger">Ingrese el solicitante.</span>'; return; }
         bootstrap.Modal.getInstance(modalEl).hide();
-        window.location.href = `/lineamiento/generar/${detalleActivo}/?modo=nueva_version&ticket=${encodeURIComponent(numero)}&verificacion_manual=1`;
+        window.location.href = `${generarLineamientoUrl(detalleActivo)}?modo=nueva_version&ticket=${encodeURIComponent(numero)}&verificacion_manual=1`;
       });
 
     })();
