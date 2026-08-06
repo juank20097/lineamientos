@@ -134,3 +134,8 @@ MESSAGE_TAGS = {
     messages_constants.WARNING: 'warning',
     messages_constants.ERROR:   'danger',
 }
+
+# Confiar en el dominio sdnas.iess.gob.ec
+CSRF_TRUSTED_ORIGINS = [
+   'https://sdnas.iess.gob.ec'
+]
