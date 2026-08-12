@@ -102,16 +102,19 @@ def seleccionar_usuario_autocomplete(page, input_id: str, nombre: str):
 
 
 def extraer_asunto_padre(page, numero_padre: str) -> str:
-    """Obtiene el asunto del ticket padre desde el titulo de la pagina de zoom,
-    quitando el prefijo 'Ticket#<numero> - ' que antepone Znuny."""
-    titulo = page.title().strip()
-    titulo = re.sub(r'^.*?Ticket#\s*' + re.escape(numero_padre) + r'\s*[-—–]\s*', '', titulo).strip()
-    if titulo:
-        return titulo
+    """Obtiene el asunto del ticket padre desde el panel de detalle del primer
+    articulo en el Zoom: el <label>Asunto:</label> seguido de <p class="Value">.
+    NO usa page.title(): en el Zoom de Znuny el <title> del documento es un
+    texto generico ('Detalle - Ticket - OTRS::ITSM 6'), no el asunto real."""
+    valor = page.locator(
+        'label:has-text("Asunto:") + p.Value, label:has-text("Asunto:") ~ p.Value'
+    ).first
+    if valor.count() > 0:
+        texto = valor.inner_text().strip()
+        if texto:
+            return texto
 
-    texto = page.locator('h1').first.inner_text().strip()
-    texto = re.sub(r'^.*?Ticket#\s*' + re.escape(numero_padre) + r'\s*[-—–]\s*', '', texto).strip()
-    return texto
+    return ''
 
 
 def crear_hijo(numero_padre: str, tipo: str, propietario_nombre: str):
