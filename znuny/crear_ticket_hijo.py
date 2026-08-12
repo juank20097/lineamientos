@@ -26,12 +26,6 @@ load_dotenv(Path(__file__).parent / '.env')
 URL    = f'{URL_BASE}/otrs/index.pl'
 TIMEOUT = 120_000
 
-ASUNTO = {
-    'Software':      'Generacion de Lineamiento - Software',
-    'Base de Datos': 'Generacion de Lineamiento - Base de Datos',
-    'Capacidad':     'Generacion de Lineamiento - Capacidad',
-}
-
 CUERPO = os.getenv(
     'ZNUNY_CUERPO_HIJO',
     'Estimad@, mediante el presente ticket solicito la generacion de lineamientos '
@@ -107,11 +101,20 @@ def seleccionar_usuario_autocomplete(page, input_id: str, nombre: str):
         page.wait_for_timeout(500)
 
 
-def crear_hijo(numero_padre: str, tipo: str, propietario_nombre: str):
-    asunto = ASUNTO.get(tipo)
-    if not asunto:
-        salida({'creado': False, 'error': f'Tipo invalido: {tipo}'})
+def extraer_asunto_padre(page, numero_padre: str) -> str:
+    """Obtiene el asunto del ticket padre desde el titulo de la pagina de zoom,
+    quitando el prefijo 'Ticket#<numero> - ' que antepone Znuny."""
+    titulo = page.title().strip()
+    titulo = re.sub(r'^.*?Ticket#\s*' + re.escape(numero_padre) + r'\s*[-—–]\s*', '', titulo).strip()
+    if titulo:
+        return titulo
 
+    texto = page.locator('h1').first.inner_text().strip()
+    texto = re.sub(r'^.*?Ticket#\s*' + re.escape(numero_padre) + r'\s*[-—–]\s*', '', texto).strip()
+    return texto
+
+
+def crear_hijo(numero_padre: str, tipo: str, propietario_nombre: str):
     try:
         with ZnunySession() as page:
             page.set_default_timeout(TIMEOUT)
@@ -128,6 +131,11 @@ def crear_hijo(numero_padre: str, tipo: str, propietario_nombre: str):
 
             if 'No TicketID is given!' in page.locator('body').inner_text():
                 salida({'creado': False, 'error': f'Ticket padre {numero_padre} no encontrado'})
+
+            asunto_padre = extraer_asunto_padre(page, numero_padre)
+            if not asunto_padre:
+                salida({'creado': False, 'error': f'No se pudo leer el asunto del ticket padre {numero_padre}'})
+            asunto = f'{asunto_padre}:{tipo}'
 
             # CLICK EN SEPARAR
             separar = page.get_by_role('link', name='Separar')
