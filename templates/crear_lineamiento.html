@@ -176,7 +176,7 @@
         </div>
 
         <div class="form-footer">
-          <a href="{% url 'home' %}" class="btn-cancelar">
+          <a href="{% url 'home' %}" class="btn-cancelar" id="btnCancelar">
             <i class="bi bi-x-lg me-1"></i> Cancelar
           </a>
           <button type="submit" class="btn-guardar" id="btnGuardar" disabled>
@@ -228,6 +228,7 @@
       document.getElementById(`manual-${tipo}`).style.display = 'none';
       actualizarBotonGuardar();
       activarBloqueoNavegacion();
+      bloquearBotonCancelar();
     }
 
     function marcarError(tipo, msg) {
@@ -388,6 +389,23 @@
       if (!bloqueoNavegacionActivo) return;
       e.preventDefault();
       e.returnValue = '';
+    }
+
+    // ── BLOQUEO DEL BOTON CANCELAR ─────────────────────────────────────────────
+    // Una vez creado un ticket hijo en Znuny, "Cancelar" ya no puede sacar al
+    // usuario del formulario: quedaria un ticket huerfano sin registro en la BD.
+    function bloquearBotonCancelar() {
+      const btn = document.getElementById('btnCancelar');
+      if (!btn || btn.dataset.bloqueado) return;
+      btn.dataset.bloqueado = '1';
+      btn.removeAttribute('href');
+      btn.classList.add('disabled');
+      btn.setAttribute('aria-disabled', 'true');
+      btn.setAttribute('tabindex', '-1');
+      btn.style.pointerEvents = 'none';
+      btn.style.opacity = '.55';
+      btn.style.cursor = 'not-allowed';
+      btn.title = 'No puedes cancelar: ya se creo un ticket hijo en Znuny.';
     }
   </script>
 </body>
