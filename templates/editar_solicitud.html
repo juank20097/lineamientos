@@ -348,13 +348,19 @@
       const btn = document.getElementById('btnCancelar');
       if (!btn || btn.dataset.bloqueado) return;
       btn.dataset.bloqueado = '1';
+      btn.removeAttribute('href');
       btn.classList.add('disabled');
       btn.setAttribute('aria-disabled', 'true');
-      btn.addEventListener('click', function(e){
-        e.preventDefault();
-        alert('No puedes cancelar: ya se creo un ticket hijo en Znuny. Debes completar y guardar el formulario, o contactar al administrador si hubo un error.');
-      });
+      btn.setAttribute('tabindex', '-1');
+      btn.style.pointerEvents = 'none';
+      btn.style.opacity = '.55';
+      btn.style.cursor = 'not-allowed';
+      btn.title = 'No puedes cancelar: ya se creo un ticket hijo en Znuny.';
     }
+
+    {% if detalles_existentes %}
+    bloquearBotonCancelar();
+    {% endif %}
   </script>
 </body>
 </html>
