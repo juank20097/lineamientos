@@ -195,7 +195,7 @@ def _generar_pdf_lineamientos(lin, version_map, watermark=False, tipos_incluir=N
             gen_sel = det.generados.filter(pk=gen_pk).first()
             version_sel = gen_sel.version if gen_sel else None
         else:
-            gen_sel   = det.generados.order_by('-version').first()
+            gen_sel   = det.generados.filter(es_borrador=False).order_by('-version').first()
             version_sel = gen_sel.version if gen_sel else None
         if not version_sel:
             continue
@@ -280,7 +280,7 @@ def _generar_pdf_lineamientos(lin, version_map, watermark=False, tipos_incluir=N
         generado = (
             detalle.generados.filter(pk=generado_pk).first()
             if generado_pk
-            else detalle.generados.order_by('-version').first()
+            else detalle.generados.filter(es_borrador=False).order_by('-version').first()
         )
         if not generado:
             continue
@@ -420,7 +420,7 @@ def _generar_pdf_lineamientos(lin, version_map, watermark=False, tipos_incluir=N
         bdd_gen  = (
             bdd_detalle.generados.filter(pk=gen_pk).first()
             if gen_pk
-            else bdd_detalle.generados.order_by('-version').first()
+            else bdd_detalle.generados.filter(es_borrador=False).order_by('-version').first()
         )
         if bdd_gen and bdd_gen.bdd_tables:
             tables    = bdd_gen.bdd_tables
@@ -747,12 +747,26 @@ def _parse_sql(content):
 @login_required
 def generar_lineamiento_bdd_view(request, detalle_id):
     detalle   = get_object_or_404(LineamientoDetalle, pk=detalle_id, usuario_asignado=request.user)
-    ultima    = detalle.generados.order_by('-version').first()
+    borrador  = detalle.generados.filter(es_borrador=True).first()
+    ultima    = detalle.generados.filter(es_borrador=False).order_by('-version').first()
     modo      = request.GET.get('modo', 'nuevo')
     ticket_nv = _limpiar_ticket(request.GET.get('ticket', ''))
     filas_precarga = []
     bdd_precarga   = {}
-    if modo in ('actualizar', 'nueva_version') and ultima:
+    if borrador:
+        filas_precarga = [
+            {'necesidad': f.necesidad, 'lineamiento': f.lineamiento,
+             'mecanismo': f.mecanismo,  'observacion': f.observacion}
+            for f in borrador.filas.all()
+        ]
+        if borrador.bdd_sql:
+            bdd_precarga = {
+                'sql':       borrador.bdd_sql,
+                'schema':    borrador.bdd_schema,
+                'tables':    borrador.bdd_tables or {},
+                'sequences': borrador.bdd_sequences or [],
+            }
+    elif modo in ('actualizar', 'nueva_version') and ultima:
         filas_precarga = [
             {'necesidad': f.necesidad, 'lineamiento': f.lineamiento,
              'mecanismo': f.mecanismo,  'observacion': f.observacion}
@@ -770,6 +784,7 @@ def generar_lineamiento_bdd_view(request, detalle_id):
         'modo': modo, 'ticket_nv': ticket_nv,
         'filas_precarga': filas_precarga,
         'bdd_precarga':   json.dumps(bdd_precarga),
+        'hay_borrador': borrador is not None,
         'diagrama_personalizado_url': detalle.diagrama_personalizado.url if detalle.diagrama_personalizado else '',
     })
 
@@ -779,20 +794,29 @@ def generar_lineamiento_bdd_view(request, detalle_id):
 @login_required
 def generar_lineamiento_capacidad_view(request, detalle_id):
     detalle   = get_object_or_404(LineamientoDetalle, pk=detalle_id, usuario_asignado=request.user)
-    ultima    = detalle.generados.order_by('-version').first()
+    borrador  = detalle.generados.filter(es_borrador=True).first()
+    ultima    = detalle.generados.filter(es_borrador=False).order_by('-version').first()
     modo      = request.GET.get('modo', 'nuevo')
     ticket_nv = _limpiar_ticket(request.GET.get('ticket', ''))
-    filas_precarga = []
-    if modo in ('actualizar', 'nueva_version') and ultima:
+    if borrador:
+        filas_precarga = [
+            {'necesidad': f.necesidad, 'lineamiento': f.lineamiento,
+             'mecanismo': f.mecanismo,  'observacion': f.observacion}
+            for f in borrador.filas.all()
+        ]
+    elif modo in ('actualizar', 'nueva_version') and ultima:
         filas_precarga = [
             {'necesidad': f.necesidad, 'lineamiento': f.lineamiento,
              'mecanismo': f.mecanismo,  'observacion': f.observacion}
             for f in ultima.filas.all()
         ]
+    else:
+        filas_precarga = []
     return render(request, 'generar_lineamiento_capacidad.html', {
         'detalle': detalle, 'ultima': ultima, 'ya_generado': ultima is not None,
         'modo': modo, 'ticket_nv': ticket_nv,
         'filas_precarga': filas_precarga,
+        'hay_borrador': borrador is not None,
         'diagrama_personalizado_url': detalle.diagrama_personalizado.url if detalle.diagrama_personalizado else '',
     })
 
@@ -1029,7 +1053,7 @@ def repositorio_detalle_view(request, formalizacion_id):
         generado_id = version_map.get(detalle.pk)
         generado = detalle.generados.filter(pk=generado_id).first() if generado_id else None
         if generado is None:
-            generado = detalle.generados.order_by('-version').first()
+            generado = detalle.generados.filter(es_borrador=False).order_by('-version').first()
         firma = firmas_por_detalle.get(detalle.pk)
         filas = generado.filas.all() if generado else []
 
@@ -1622,23 +1646,35 @@ def generar_lineamiento_view(request, detalle_id):
     if detalle.tipo == 'infraestructura':
         qs = request.GET.urlencode()
         return redirect(f"/lineamiento/generar-capacidad/{detalle_id}/" + (f"?{qs}" if qs else ""))
-    clave = f'chat_sw_{detalle_id}'
-    if clave not in request.session:
+    clave    = f'chat_sw_{detalle_id}'
+    borrador = detalle.generados.filter(es_borrador=True).first()
+    if borrador and borrador.chat_estado:
+        request.session[clave] = borrador.chat_estado
+    elif clave not in request.session:
         request.session[clave] = {'paso': 'inicio', 'info': {}, 'mensajes': []}
-    ultima    = detalle.generados.order_by('-version').first()
+    ultima    = detalle.generados.filter(es_borrador=False).order_by('-version').first()
     modo      = request.GET.get('modo', 'nuevo')
     ticket_nv = _limpiar_ticket(request.GET.get('ticket', ''))
-    filas_precarga = []
-    if modo in ('actualizar', 'nueva_version') and ultima:
+    if borrador:
+        filas_precarga = [
+            {'necesidad': f.necesidad, 'lineamiento': f.lineamiento,
+             'mecanismo': f.mecanismo,  'observacion': f.observacion}
+            for f in borrador.filas.all()
+        ]
+    elif modo in ('actualizar', 'nueva_version') and ultima:
         filas_precarga = [
             {'necesidad': f.necesidad, 'lineamiento': f.lineamiento,
              'mecanismo': f.mecanismo,  'observacion': f.observacion}
             for f in ultima.filas.all()
         ]
+    else:
+        filas_precarga = []
+    mensajes_previos = (borrador.chat_estado or {}).get('mensajes', []) if borrador else []
     return render(request, 'generar_lineamiento_software.html', {
         'detalle': detalle, 'paso_inicial': PASOS['inicio'],
         'ultima': ultima, 'ya_generado': ultima is not None,
         'modo': modo, 'ticket_nv': ticket_nv, 'filas_precarga': filas_precarga,
+        'hay_borrador': borrador is not None, 'mensajes_previos': mensajes_previos,
     })
 
 
@@ -1658,15 +1694,56 @@ def chat_software_ajax(request, detalle_id):
         paso = PASOS['inicio']
         return JsonResponse({'respuesta': paso['pregunta'], 'tipo': paso['tipo'], 'opciones': paso.get('opciones', []), 'guidelines': [], 'completado': False})
     paso_actual = estado['paso']; info = estado['info']
+    mensajes = estado.setdefault('mensajes', [])
     if msg and paso_actual != 'completado':
+        mensajes.append({'tipo': 'user', 'texto': msg})
         campo = PASOS[paso_actual].get('campo')
         if campo: info[campo] = _procesar_valor(campo, msg)
         paso_actual = _siguiente_paso(paso_actual, info)
         estado['paso'] = paso_actual; estado['info'] = info
     paso_def = PASOS[paso_actual]; completado = paso_actual == 'completado'
+    mensajes.append({'tipo': 'bot', 'texto': paso_def['pregunta']})
     request.session[clave] = estado; request.session.modified = True
     return JsonResponse({'respuesta': paso_def['pregunta'], 'tipo': paso_def['tipo'],
         'opciones': paso_def.get('opciones', []), 'guidelines': _guidelines_para_preview(info), 'completado': completado})
+
+
+# ── AJAX: GUARDAR BORRADOR ─────────────────────────────────────────────────────
+
+@login_required
+@require_POST
+def guardar_borrador_ajax(request, detalle_id):
+    detalle = get_object_or_404(LineamientoDetalle, pk=detalle_id, usuario_asignado=request.user)
+    data    = json.loads(request.body)
+    filas   = data.get('filas', [])
+
+    generado, _creado = LineamientoGenerado.objects.get_or_create(
+        detalle=detalle, es_borrador=True, version=Decimal('0.0'),
+        defaults={'creado_por': request.user},
+    )
+
+    bdd_sql       = data.get('bdd_sql', '')
+    bdd_schema    = data.get('bdd_schema', '')
+    bdd_tables    = data.get('bdd_tables', None)
+    bdd_sequences = data.get('bdd_sequences', None)
+    if bdd_sql:       generado.bdd_sql       = bdd_sql
+    if bdd_schema:     generado.bdd_schema    = bdd_schema
+    if bdd_tables is not None:    generado.bdd_tables    = bdd_tables
+    if bdd_sequences is not None: generado.bdd_sequences = bdd_sequences
+
+    if detalle.tipo == 'software':
+        generado.chat_estado = request.session.get(f'chat_sw_{detalle_id}')
+
+    generado.save()
+
+    generado.filas.all().delete()
+    for i, fila in enumerate(filas, start=1):
+        LineamientoGeneradoFila.objects.create(
+            generado=generado, orden=i,
+            necesidad=fila.get('necesidad', ''), lineamiento=fila.get('lineamiento', ''),
+            mecanismo=fila.get('mecanismo', ''),  observacion=fila.get('observacion', ''),
+        )
+    return JsonResponse({'ok': True})
 
 
 # ── AJAX: FINALIZAR ───────────────────────────────────────────────────────────
@@ -1711,7 +1788,7 @@ def finalizar_ajax(request, detalle_id):
     bdd_tables    = data.get('bdd_tables', None)
     bdd_sequences = data.get('bdd_sequences', None)
     if modo == 'actualizar':
-        generado = detalle.generados.order_by('-version').first()
+        generado = detalle.generados.filter(es_borrador=False).order_by('-version').first()
         if not generado:
             return JsonResponse({'ok': False, 'error': 'No existe version para actualizar'})
         if generado.en_formalizacion:
@@ -1727,7 +1804,7 @@ def finalizar_ajax(request, detalle_id):
         if bdd_sequences: generado.bdd_sequences = bdd_sequences
         generado.save(update_fields=['bdd_sql','bdd_schema','bdd_tables','bdd_sequences'])
     elif modo == 'nueva_version':
-        ultima   = detalle.generados.order_by('-version').first()
+        ultima   = detalle.generados.filter(es_borrador=False).order_by('-version').first()
         nueva_v  = (ultima.version + Decimal('1.0')) if ultima else Decimal('1.0')
         generado = LineamientoGenerado.objects.create(
             detalle=detalle, version=nueva_v, ticket=ticket, creado_por=request.user,
@@ -1808,6 +1885,7 @@ def finalizar_ajax(request, detalle_id):
         finally:
             if tmp_dir and os.path.exists(tmp_dir):
                 shutil.rmtree(tmp_dir, ignore_errors=True)
+    detalle.generados.filter(es_borrador=True).delete()
     return JsonResponse({'ok': True, 'version': generado.version_display(), 'id': generado.pk})
 
 
@@ -1816,7 +1894,7 @@ def finalizar_ajax(request, detalle_id):
 @login_required
 def cargar_version_ajax(request, detalle_id):
     detalle  = get_object_or_404(LineamientoDetalle, pk=detalle_id, usuario_asignado=request.user)
-    generado = detalle.generados.order_by('-version').first()
+    generado = detalle.generados.filter(es_borrador=False).order_by('-version').first()
     if not generado:
         return JsonResponse({'ok': False, 'error': 'Sin version guardada'})
     filas = [{'necesidad': f.necesidad, 'lineamiento': f.lineamiento,

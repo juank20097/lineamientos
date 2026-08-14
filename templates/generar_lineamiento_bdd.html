@@ -78,6 +78,8 @@
     .preview-count{font-size:.75rem;color:#94a3b8;}
     .btn-finalizar{display:none;margin-left:auto;background:var(--bdd);color:#fff;border:none;border-radius:7px;padding:6px 16px;font-size:.8rem;font-weight:700;cursor:pointer;align-items:center;gap:6px;}
     .btn-finalizar.visible{display:flex;}
+    .btn-borrador{display:flex;background:#fff;color:#64748b;border:1.5px solid #cbd5e1;border-radius:7px;padding:6px 16px;font-size:.8rem;font-weight:700;cursor:pointer;align-items:center;gap:6px;}
+    .btn-borrador:hover{border-color:var(--bdd);color:var(--bdd);}
     .preview-wrap{flex:1;overflow:auto;}
     .doc-table{border-collapse:collapse;width:100%;font-size:.75rem;min-width:900px;}
     .doc-table thead tr{background:var(--bdd);color:#fff;}
@@ -206,10 +208,15 @@
       <div class="preview-head">
         <h6><i class="bi bi-file-earmark-spreadsheet me-1" style="color:var(--bdd);"></i>Lineamientos BDD</h6>
         <span class="preview-count" id="previewCount">0 lineamientos</span>
-        <button class="btn-finalizar {% if modo != 'nuevo' %}visible{% endif %}" id="btnFinalizar">
-          <i class="bi bi-check2-circle"></i>
-          {% if modo == 'actualizar' %}Guardar Cambios{% elif modo == 'nueva_version' %}Guardar Nueva Versión{% else %}Finalizar{% endif %}
-        </button>
+        <div style="margin-left:auto;display:flex;gap:8px;">
+          <button class="btn-borrador" id="btnGuardarBorrador">
+            <i class="bi bi-save2"></i> Guardar Borrador
+          </button>
+          <button class="btn-finalizar {% if modo != 'nuevo' %}visible{% endif %}" id="btnFinalizar">
+            <i class="bi bi-check2-circle"></i>
+            {% if modo == 'actualizar' %}Guardar Cambios{% elif modo == 'nueva_version' %}Guardar Nueva Versión{% else %}Finalizar{% endif %}
+          </button>
+        </div>
       </div>
       <div class="preview-wrap">
         <div class="empty-preview" id="emptyState">
@@ -239,6 +246,7 @@
     const CARGAR_URL    = '{% url "cargar_sql" detalle.pk %}';
     const DIAGRAMA_URL  = '{% url "diagrama_personalizado" detalle.pk %}';
     const FINALIZAR_URL = '{% url "finalizar_lineamiento" detalle.pk %}';
+    const GUARDAR_BORRADOR_URL = '{% url "guardar_borrador_lineamiento" detalle.pk %}';
     const DIAGRAMA_PERSONALIZADO_URL = '{{ diagrama_personalizado_url }}';
     const RESPONSABLE   = '{{ request.user.get_full_name|default:request.user.username }}';
     const HOY           = new Date().toLocaleDateString('es-EC',{day:'2-digit',month:'2-digit',year:'numeric'});
@@ -430,7 +438,6 @@
       renderTablasTab();
       actualizarSQL();
       dibujarDiagrama();
-      generarFilasLineamientos();
     }
 
     // ── ZOOM ──
@@ -688,26 +695,6 @@
       return tr;
     }
 
-    function generarFilasLineamientos(){
-      docBody.innerHTML='';
-      const schema=SCHEMA.toUpperCase();
-      const tablenames=Object.keys(TABLES);
-
-      // UNA sola fila con todas las tablas
-      if(tablenames.length){
-        const nec=`En el esquema ${schema} crear las siguientes tablas:\n${tablenames.join('\n')}`;
-        docBody.appendChild(crearFila({necesidad:nec,lineamiento:'',mecanismo:'',observacion:''}));
-      }
-      // UNA sola fila con todas las secuencias
-      if(SEQUENCES.length){
-        const nec=`En el esquema ${schema} crear las siguientes secuencias:\n${SEQUENCES.join('\n')}`;
-        docBody.appendChild(crearFila({necesidad:nec,lineamiento:'',mecanismo:'',observacion:''}));
-      }
-
-      emptyState.style.display='none'; docTable.style.display='table'; renumerar();
-      document.getElementById('btnFinalizar').classList.add('visible');
-    }
-
     document.getElementById('btnAddRow').addEventListener('click',()=>{
       emptyState.style.display='none'; docTable.style.display='table';
       docBody.appendChild(crearFila(null)); renumerar();
@@ -738,7 +725,41 @@
         hint.innerHTML='<i class="bi bi-info-circle me-1"></i>Carga el .sql si quieres ver el diagrama y las tablas. No es obligatorio.';
         document.getElementById('uploadZone').appendChild(hint);
       }
+    } else {
+      docBody.appendChild(crearFila(null));
+      emptyState.style.display='none';
+      docTable.style.display='table';
+      renumerar();
+      document.getElementById('btnFinalizar').classList.add('visible');
     }
+
+    // ── GUARDAR BORRADOR ──
+    document.getElementById('btnGuardarBorrador').addEventListener('click', ()=>{
+      const filas = [...docBody.querySelectorAll('tr')].map(tr=>{
+        const c = tr.querySelectorAll('td');
+        return {necesidad:c[3].innerText, lineamiento:c[4].innerText, mecanismo:c[5].innerText, observacion:c[7].innerText};
+      });
+      const btn = document.getElementById('btnGuardarBorrador');
+      btn.disabled = true;
+      fetch(GUARDAR_BORRADOR_URL,{
+        method:'POST',
+        headers:{'Content-Type':'application/json','X-CSRFToken':CSRF},
+        body: JSON.stringify({
+          filas,
+          bdd_sql:       document.getElementById('sqlRaw').value || '',
+          bdd_schema:    SCHEMA,
+          bdd_tables:    TABLES,
+          bdd_sequences: SEQUENCES,
+        })
+      })
+      .then(r=>r.json())
+      .then(data=>{
+        btn.disabled = false;
+        if(data.ok) alert('Borrador guardado correctamente');
+        else alert('Error al guardar borrador: '+(data.error||'desconocido'));
+      })
+      .catch(()=>{ btn.disabled=false; alert('Error de conexion al guardar borrador.'); });
+    });
 
     // ── FINALIZAR ──
     document.getElementById('btnFinalizar').addEventListener('click',()=>{

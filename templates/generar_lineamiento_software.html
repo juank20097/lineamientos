@@ -70,6 +70,9 @@
     .preview-count{font-size:.75rem;color:#94a3b8;}
     .btn-finalizar{display:none;margin-left:auto;background:var(--sw);color:#fff;border:none;border-radius:7px;padding:6px 16px;font-size:.8rem;font-weight:700;cursor:pointer;align-items:center;gap:6px;}
     .btn-finalizar.visible{display:flex;}
+    .btn-finalizar:disabled{background:#cbd5e1;color:#94a3b8;cursor:not-allowed;}
+    .btn-borrador{display:flex;background:#fff;color:#64748b;border:1.5px solid #cbd5e1;border-radius:7px;padding:6px 16px;font-size:.8rem;font-weight:700;cursor:pointer;align-items:center;gap:6px;}
+    .btn-borrador:hover{border-color:var(--sw);color:var(--sw);}
     .preview-wrap{flex:1;overflow:auto;}
 
     .doc-table{border-collapse:collapse;width:100%;font-size:.75rem;min-width:900px;}
@@ -138,11 +141,20 @@
       </div>
 
       <div class="chat-messages" id="chatMessages">
+        {% if mensajes_previos %}
+          {% for m in mensajes_previos %}
+          <div class="msg {{ m.tipo }}">
+            <div class="msg-avatar"><i class="bi {% if m.tipo == 'bot' %}bi-robot{% else %}bi-person{% endif %}"></i></div>
+            <div class="msg-bubble">{{ m.texto|safe }}</div>
+          </div>
+          {% endfor %}
+        {% else %}
         <!-- Mensaje inicial del bot -->
         <div class="msg bot">
           <div class="msg-avatar"><i class="bi bi-robot"></i></div>
           <div class="msg-bubble" id="msgInicial">{{ paso_inicial.pregunta|safe }}</div>
         </div>
+        {% endif %}
       </div>
 
       <div class="chat-input-area">
@@ -165,10 +177,15 @@
       <div class="preview-head">
         <h6><i class="bi bi-file-earmark-spreadsheet me-1" style="color:var(--sw);"></i>Lineamientos SW</h6>
         <span class="preview-count" id="previewCount">0 lineamientos</span>
-        <button class="btn-finalizar {% if modo != 'nuevo' %}visible{% endif %}" id="btnFinalizar">
-          <i class="bi bi-check2-circle"></i>
-          {% if modo == 'actualizar' %}Guardar Cambios{% elif modo == 'nueva_version' %}Guardar Nueva Versión{% else %}Finalizar{% endif %}
-        </button>
+        <div style="margin-left:auto;display:flex;gap:8px;">
+          <button class="btn-borrador" id="btnGuardarBorrador">
+            <i class="bi bi-save2"></i> Guardar Borrador
+          </button>
+          <button class="btn-finalizar visible" id="btnFinalizar" disabled>
+            <i class="bi bi-check2-circle"></i>
+            {% if modo == 'actualizar' %}Guardar Cambios{% elif modo == 'nueva_version' %}Guardar Nueva Versión{% else %}Finalizar{% endif %}
+          </button>
+        </div>
       </div>
       <div class="preview-wrap">
         <div class="empty-preview" id="emptyState">
@@ -198,6 +215,7 @@
     const CSRF          = '{{ csrf_token }}';
     const CHAT_URL      = '{% url "chat_software" detalle.pk %}';
     const FINALIZAR_URL = '{% url "finalizar_lineamiento" detalle.pk %}';
+    const GUARDAR_BORRADOR_URL = '{% url "guardar_borrador_lineamiento" detalle.pk %}';
     const VERSION_URL   = '{% url "cargar_version" detalle.pk %}';
     const RESPONSABLE   = '{{ request.user.get_full_name|default:request.user.username }}';
     const HOY           = new Date().toLocaleDateString('es-EC',{day:'2-digit',month:'2-digit',year:'numeric'});
@@ -266,10 +284,15 @@
       const docTable = document.getElementById('docTable');
       const emptyState = document.getElementById('emptyState');
 
-      docBody.innerHTML = '';
-      guidelines.forEach((g, i) => {
-        const tr = crearFila(g);
-        docBody.appendChild(tr);
+      // El backend reenvia el set acumulado de sugerencias del bot en cada
+      // respuesta; solo agregamos las que aun no estan pintadas (por
+      // guideline id) para no duplicar ni tocar las filas manuales del usuario.
+      const idsExistentes = new Set(
+        [...docBody.querySelectorAll('tr[data-guideline-id]')].map(tr => tr.dataset.guidelineId)
+      );
+      guidelines.forEach(g => {
+        if(g.id !== undefined && g.id !== null && idsExistentes.has(String(g.id))) return;
+        docBody.appendChild(crearFila(g));
       });
       renumerar();
       emptyState.style.display = 'none';
@@ -305,7 +328,6 @@
           chatInput.disabled = true;
           btnSend.disabled   = true;
           opcionesWrap.style.display = 'none';
-          document.getElementById('btnFinalizar').classList.add('visible');
         }
       })
       .catch(()=>{ quitarTyping(); btnSend.disabled=false; agregarMsg('Error de conexion. Intenta de nuevo.','bot'); });
@@ -314,9 +336,10 @@
     btnSend.addEventListener('click', ()=>enviarMensaje());
     chatInput.addEventListener('keydown', e=>{ if(e.key==='Enter' && !e.shiftKey){ e.preventDefault(); enviarMensaje(); }});
 
-    // Reiniciar chat
+    // Reiniciar chat (solo limpia las filas generadas por el bot; las filas
+    // manuales del usuario se conservan)
     document.getElementById('btnReiniciar').addEventListener('click', ()=>{
-      if(!confirm('\u00bfReiniciar el asistente? Se perder\u00e1n las respuestas actuales.')) return;
+      if(!confirm('\u00bfReiniciar el asistente? Se perder\u00e1n las respuestas actuales del chat (las filas manuales se conservan).')) return;
       fetch(CHAT_URL, {
         method: 'POST',
         headers: {'Content-Type':'application/json','X-CSRFToken': CSRF},
@@ -331,12 +354,13 @@
         completado = false;
         chatInput.disabled = false;
         btnSend.disabled   = false;
-        // Limpiar preview
-        document.getElementById('docBody').innerHTML = '';
-        document.getElementById('docTable').style.display = 'none';
-        document.getElementById('emptyState').style.display = 'flex';
-        document.getElementById('previewCount').textContent = '0 lineamientos';
-        document.getElementById('btnFinalizar').classList.remove('visible');
+        // Quitar solo las filas generadas por el bot
+        document.querySelectorAll('#docBody tr[data-guideline-id]').forEach(tr => tr.remove());
+        renumerar();
+        if(docBody.children.length === 0){
+          document.getElementById('docTable').style.display = 'none';
+          document.getElementById('emptyState').style.display = 'flex';
+        }
       })
       .catch(()=>alert('Error al reiniciar.'));
     });
@@ -355,7 +379,6 @@
         renumerar();
         document.getElementById('emptyState').style.display = 'none';
         document.getElementById('docTable').style.display = 'table';
-        document.getElementById('btnFinalizar').classList.add('visible');
         agregarMsg(`Se cargo la version <strong>${data.version}</strong> con ${data.filas.length} lineamientos.`, 'bot');
       })
       .catch(()=>{ ocultarLoading(); alert('Error al cargar version.'); });
@@ -369,10 +392,12 @@
     function renumerar(){
       [...docBody.querySelectorAll('tr')].forEach((tr,i)=>tr.querySelector('.num').textContent=i+1);
       document.getElementById('previewCount').textContent=`${docBody.children.length} lineamiento${docBody.children.length!==1?'s':''}`;
+      document.getElementById('btnFinalizar').disabled = docBody.children.length === 0;
     }
 
     function crearFila(g){
       const tr = document.createElement('tr');
+      if(g && g.id !== undefined && g.id !== null) tr.dataset.guidelineId = g.id;
       tr.innerHTML = `
         <td class="num"></td>
         <td>${RESPONSABLE}</td>
@@ -395,15 +420,40 @@
       docBody.appendChild(crearFila(null)); renumerar();
     });
 
-    // Precargar filas en modo actualizar/nueva_version
+    // Precargar filas en modo actualizar/nueva_version, o borrador guardado
     if(FILAS_PRECARGA.length > 0){
       FILAS_PRECARGA.forEach(f => docBody.appendChild(crearFila(f)));
       emptyState.style.display='none';
       docTable.style.display='table';
       renumerar();
-      document.getElementById('btnFinalizar').classList.add('visible');
-      agregarMsg('Se pre-cargaron los lineamientos de la version anterior. Puedes editarlos y finalizar.','bot');
+    } else {
+      docBody.appendChild(crearFila(null));
+      emptyState.style.display='none';
+      docTable.style.display='table';
+      renumerar();
     }
+
+    // ── GUARDAR BORRADOR ──
+    document.getElementById('btnGuardarBorrador').addEventListener('click', ()=>{
+      const filas = [...docBody.querySelectorAll('tr')].map(tr=>{
+        const c = tr.querySelectorAll('td');
+        return {necesidad:c[3].innerText, lineamiento:c[4].innerText, mecanismo:c[5].innerText, observacion:c[7].innerText};
+      });
+      const btn = document.getElementById('btnGuardarBorrador');
+      btn.disabled = true;
+      fetch(GUARDAR_BORRADOR_URL,{
+        method:'POST',
+        headers:{'Content-Type':'application/json','X-CSRFToken':CSRF},
+        body: JSON.stringify({filas})
+      })
+      .then(r=>r.json())
+      .then(data=>{
+        btn.disabled = false;
+        if(data.ok) alert('Borrador guardado correctamente');
+        else alert('Error al guardar borrador: '+(data.error||'desconocido'));
+      })
+      .catch(()=>{ btn.disabled=false; alert('Error de conexion al guardar borrador.'); });
+    });
 
     // ── FINALIZAR ──
     document.getElementById('btnFinalizar').addEventListener('click',()=>{

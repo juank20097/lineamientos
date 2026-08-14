@@ -25,6 +25,7 @@ urlpatterns = [
     path('lineamiento/diagrama/<int:detalle_id>/',       views.diagrama_personalizado_ajax,  name='diagrama_personalizado'),
     path('lineamiento/chat/<int:detalle_id>/',           views.chat_software_ajax,           name='chat_software'),
     path('lineamiento/finalizar/<int:detalle_id>/',      views.finalizar_ajax,               name='finalizar_lineamiento'),
+    path('lineamiento/guardar-borrador/<int:detalle_id>/', views.guardar_borrador_ajax,      name='guardar_borrador_lineamiento'),
     path('lineamiento/version/<int:detalle_id>/',        views.cargar_version_ajax,          name='cargar_version'),
     path('lineamiento/descargar/<int:lineamiento_id>/',  views.descargar_pdf_solicitud,      name='descargar_solicitud'),
     path('lineamiento/formalizar/<int:lineamiento_id>/', views.formalizar_ajax,              name='formalizar_lineamiento'),

@@ -44,6 +44,8 @@
     .preview-count{font-size:.75rem;color:#94a3b8;}
     .btn-finalizar{display:flex;margin-left:auto;background:var(--inf);color:#fff;border:none;border-radius:7px;padding:6px 16px;font-size:.8rem;font-weight:700;cursor:pointer;align-items:center;gap:6px;}
     .btn-finalizar:disabled{background:#cbd5e1;color:#94a3b8;cursor:not-allowed;}
+    .btn-borrador{display:flex;background:#fff;color:#64748b;border:1.5px solid #cbd5e1;border-radius:7px;padding:6px 16px;font-size:.8rem;font-weight:700;cursor:pointer;align-items:center;gap:6px;}
+    .btn-borrador:hover{border-color:var(--inf);color:var(--inf);}
     .preview-wrap{flex:1;overflow:auto;}
     .doc-table{border-collapse:collapse;width:100%;font-size:.75rem;min-width:900px;}
     .doc-table thead tr{background:var(--inf);color:#fff;}
@@ -115,20 +117,25 @@
       <div class="preview-head">
         <h6><i class="bi bi-file-earmark-spreadsheet me-1" style="color:var(--inf);"></i>Lineamientos Infraestructura</h6>
         <span class="preview-count" id="previewCount">0 lineamientos</span>
-        <button class="btn-finalizar" id="btnFinalizar" disabled title="Complete al menos el diagrama o una fila de lineamiento">
-          <i class="bi bi-check2-circle"></i>
-          {% if modo == 'actualizar' %}Guardar Cambios{% elif modo == 'nueva_version' %}Guardar Nueva Versión{% else %}Finalizar{% endif %}
-        </button>
+        <div style="margin-left:auto;display:flex;gap:8px;">
+          <button class="btn-borrador" id="btnGuardarBorrador">
+            <i class="bi bi-save2"></i> Guardar Borrador
+          </button>
+          <button class="btn-finalizar" id="btnFinalizar" disabled title="Complete al menos el diagrama o una fila de lineamiento">
+            <i class="bi bi-check2-circle"></i>
+            {% if modo == 'actualizar' %}Guardar Cambios{% elif modo == 'nueva_version' %}Guardar Nueva Versión{% else %}Finalizar{% endif %}
+          </button>
+        </div>
       </div>
       <div class="preview-wrap">
-        <div class="empty-preview" id="emptyState">
+        <div class="empty-preview" id="emptyState" style="display:none;">
           <i class="bi bi-hdd-network" style="color:#cbd5e1;"></i>
           <p>Agrega una fila para comenzar a registrar los lineamientos.</p>
           <button id="btnAddRowInicial" style="background:var(--inf);border:none;color:#fff;border-radius:7px;padding:8px 20px;font-size:.85rem;font-weight:600;cursor:pointer;display:flex;align-items:center;gap:8px;">
             <i class="bi bi-plus-lg"></i> Añadir fila
           </button>
         </div>
-        <table class="doc-table" id="docTable" style="display:none;">
+        <table class="doc-table" id="docTable" style="display:table;">
           <thead>
             <tr><th>#</th><th>Responsable</th><th>Tipo</th><th>Necesidad</th><th>Lineamiento</th><th>Mecanismo de Implementación</th><th>Fecha</th><th>Observación</th><th></th></tr>
           </thead>
@@ -150,6 +157,7 @@
     const CSRF          = '{{ csrf_token }}';
     const DIAGRAMA_URL  = '{% url "diagrama_personalizado" detalle.pk %}';
     const FINALIZAR_URL = '{% url "finalizar_lineamiento" detalle.pk %}';
+    const GUARDAR_BORRADOR_URL = '{% url "guardar_borrador_lineamiento" detalle.pk %}';
     const DIAGRAMA_PERSONALIZADO_URL = '{{ diagrama_personalizado_url }}';
     const RESPONSABLE   = '{{ request.user.get_full_name|default:request.user.username }}';
     const HOY           = new Date().toLocaleDateString('es-EC',{day:'2-digit',month:'2-digit',year:'numeric'});
@@ -273,13 +281,37 @@
     document.getElementById('btnAddRow').addEventListener('click', agregarFilaVacia);
     document.getElementById('btnAddRowInicial').addEventListener('click', agregarFilaVacia);
 
-    // Precargar filas en modo actualizar/nueva_version
+    // Precargar filas en modo actualizar/nueva_version, o fila vacia inicial
     if(FILAS_PRECARGA.length > 0){
       FILAS_PRECARGA.forEach(f=>docBody.appendChild(crearFila(f)));
-      emptyState.style.display='none';
-      docTable.style.display='table';
-      renumerar();
+    } else {
+      docBody.appendChild(crearFila(null));
     }
+    emptyState.style.display='none';
+    docTable.style.display='table';
+    renumerar();
+
+    // ── GUARDAR BORRADOR ──
+    document.getElementById('btnGuardarBorrador').addEventListener('click', ()=>{
+      const filas = [...docBody.querySelectorAll('tr')].map(tr=>{
+        const c = tr.querySelectorAll('td');
+        return {necesidad:c[3].innerText, lineamiento:c[4].innerText, mecanismo:c[5].innerText, observacion:c[7].innerText};
+      });
+      const btn = document.getElementById('btnGuardarBorrador');
+      btn.disabled = true;
+      fetch(GUARDAR_BORRADOR_URL,{
+        method:'POST',
+        headers:{'Content-Type':'application/json','X-CSRFToken':CSRF},
+        body: JSON.stringify({filas})
+      })
+      .then(r=>r.json())
+      .then(data=>{
+        btn.disabled = false;
+        if(data.ok) alert('Borrador guardado correctamente');
+        else alert('Error al guardar borrador: '+(data.error||'desconocido'));
+      })
+      .catch(()=>{ btn.disabled=false; alert('Error de conexion al guardar borrador.'); });
+    });
 
     // ── FINALIZAR ──
     document.getElementById('btnFinalizar').addEventListener('click',()=>{

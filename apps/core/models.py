@@ -81,11 +81,11 @@ class LineamientoDetalle(models.Model):
 
     @property
     def ultima_version(self):
-        return self.generados.order_by('-version').first()
+        return self.generados.filter(es_borrador=False).order_by('-version').first()
 
     @property
     def finalizado(self):
-        return self.generados.exists()
+        return self.generados.filter(es_borrador=False).exists()
 
 
 class LineamientoGenerado(models.Model):
@@ -105,6 +105,9 @@ class LineamientoGenerado(models.Model):
     bdd_schema     = models.CharField(max_length=100, blank=True, default='', verbose_name='Schema BDD')
     bdd_tables     = models.JSONField(null=True, blank=True, verbose_name='Tablas BDD')
     bdd_sequences  = models.JSONField(null=True, blank=True, verbose_name='Secuencias BDD')
+    # Borrador: version de trabajo persistida sin pasar por Znuny (no cuenta como version real)
+    es_borrador    = models.BooleanField(default=False, verbose_name='Es borrador')
+    chat_estado    = models.JSONField(null=True, blank=True, verbose_name='Estado del chat (solo software)')
 
     class Meta:
         db_table = 'Lineamientos_Tipos'
