@@ -1095,10 +1095,14 @@ def repositorio_detalle_view(request, formalizacion_id):
 
 
 def _solicitudes_staff(user):
-    """Solicitudes del staff con su progreso calculado. Retorna (asignadas, atendidas, progreso_dict)."""
-    solicitudes = list(Lineamiento.objects.filter(
-        creado_por=user
-    ).prefetch_related('detalles__usuario_asignado', 'detalles__generados').order_by('-fecha_creacion'))
+    """Solicitudes visibles para un usuario staff, con su progreso calculado.
+    Todo usuario is_staff actua como supervisor global: ve TODAS las
+    solicitudes del sistema, sin importar quien las creo. Retorna
+    (asignadas, atendidas, progreso_dict)."""
+    solicitudes = list(Lineamiento.objects.all(
+    ).prefetch_related(
+        'detalles__usuario_asignado', 'detalles__generados',
+    ).order_by('-fecha_creacion'))
     progreso = {}
     for sol in solicitudes:
         detalles    = list(sol.detalles.all())
@@ -1909,7 +1913,7 @@ def cargar_version_ajax(request, detalle_id):
 def descargar_pdf_solicitud(request, lineamiento_id):
     if not request.user.is_staff:
         return redirect('home')
-    lin = get_object_or_404(Lineamiento, pk=lineamiento_id, creado_por=request.user)
+    lin = get_object_or_404(Lineamiento, pk=lineamiento_id)
     try:
         version_map = {}
         if request.method == 'POST':
@@ -1981,7 +1985,7 @@ def _crear_formalizacion_si_no_existe(lin, version_map, usuario):
 def formalizar_ajax(request, lineamiento_id):
     if not request.user.is_staff:
         return JsonResponse({'ok': False, 'error': 'No autorizado'}, status=403)
-    lin = get_object_or_404(Lineamiento, pk=lineamiento_id, creado_por=request.user)
+    lin = get_object_or_404(Lineamiento, pk=lineamiento_id)
     version_map = {}
     for key, val in request.POST.items():
         if key.startswith('version_') and val:
@@ -2022,7 +2026,7 @@ def formalizar_ajax(request, lineamiento_id):
 def estado_formalizacion_ajax(request, lineamiento_id):
     if not request.user.is_staff:
         return JsonResponse({'ok': False, 'error': 'No autorizado'}, status=403)
-    lin = get_object_or_404(Lineamiento, pk=lineamiento_id, creado_por=request.user)
+    lin = get_object_or_404(Lineamiento, pk=lineamiento_id)
     version_map = {}
     for key, val in request.GET.items():
         if key.startswith('version_') and val:
@@ -2051,7 +2055,7 @@ def estado_formalizacion_ajax(request, lineamiento_id):
 def eliminar_detalle_view(request, detalle_id):
     if not request.user.is_staff:
         return redirect('home')
-    detalle = get_object_or_404(LineamientoDetalle, pk=detalle_id, lineamiento__creado_por=request.user)
+    detalle = get_object_or_404(LineamientoDetalle, pk=detalle_id)
     if detalle.finalizado:
         return redirect('editar_solicitud', lineamiento_id=detalle.lineamiento.pk)
     lin_id = detalle.lineamiento.pk
@@ -2066,7 +2070,7 @@ def eliminar_detalle_view(request, detalle_id):
 def editar_solicitud_view(request, lineamiento_id):
     if not request.user.is_staff:
         return redirect('home')
-    lin = get_object_or_404(Lineamiento, pk=lineamiento_id, creado_por=request.user)
+    lin = get_object_or_404(Lineamiento, pk=lineamiento_id)
     detalles_existentes = list(lin.detalles.select_related('usuario_asignado').all())
     tipos_existentes    = {d.tipo for d in detalles_existentes}
     tipos_disponibles   = [t for t in ['software', 'bdd', 'infraestructura'] if t not in tipos_existentes]
