@@ -699,18 +699,36 @@ def _parse_columnas(body):
     return cols
 
 
+def _extraer_bloque_parentesis(content, pos_apertura):
+    # Extrae el contenido entre el '(' en pos_apertura y su ')' correspondiente,
+    # respetando parentesis anidados (tipos con precision/escala, CHECK, etc.)
+    profundidad = 0
+    for i in range(pos_apertura, len(content)):
+        if content[i] == '(':
+            profundidad += 1
+        elif content[i] == ')':
+            profundidad -= 1
+            if profundidad == 0:
+                return content[pos_apertura + 1:i], i + 1
+    return content[pos_apertura + 1:], len(content)
+
+
 def _parse_sql(content):
     # Eliminar bloques /* ... */ antes de parsear (FKs comentadas, etc)
     content = re.sub(r'/\*.*?\*/', '', content, flags=re.DOTALL)
     schema = None; tables = {}; sequences = []
-    m = re.search(r'CREATE\s+TABLE\s+(\w+)\.(\w+)', content, re.I)
-    if m:
+    # Esquema es opcional: soporta tanto "CREATE TABLE ESQUEMA.TABLA" como "CREATE TABLE TABLA"
+    m = re.search(r'CREATE\s+TABLE\s+(?:(\w+)\.)?(\w+)', content, re.I)
+    if m and m.group(1):
         schema = m.group(1).upper()
-    for m in re.finditer(r'CREATE\s+SEQUENCE\s+\w+\.(\w+)', content, re.I):
-        sequences.append(m.group(1).upper())
-    for m in re.finditer(r'CREATE\s+TABLE\s+\w+\.(\w+)\s*\((.+?)\)\s*;', content, re.I | re.DOTALL):
+    for m in re.finditer(r'CREATE\s+SEQUENCE\s+(?:(\w+)\.)?(\w+)', content, re.I):
+        sequences.append(m.group(2).upper())
+    # Se busca el '(' de apertura y se extrae el bloque respetando parentesis anidados,
+    # en vez de un regex no-greedy que puede cortar en el primer ')' de otra sentencia
+    # (p.ej. un ALTER TABLE ... PRIMARY KEY (...) que aparezca antes del cierre real).
+    for m in re.finditer(r'CREATE\s+TABLE\s+(?:\w+\.)?(\w+)\s*\(', content, re.I):
         tname = m.group(1).upper()
-        body  = m.group(2)
+        body, _fin = _extraer_bloque_parentesis(content, m.end() - 1)
         tables[tname] = {'columns': _parse_columnas(body), 'pks': [], 'fks': []}
         # PKs inline dentro del CREATE TABLE: CONSTRAINT xxx PRIMARY KEY (col)
         pk_m = re.search(r'CONSTRAINT\s+\w+\s+PRIMARY\s+KEY\s*\(([^)]+)\)', body, re.I)
@@ -719,7 +737,8 @@ def _parse_sql(content):
             tables[tname]['pks'] = pks
             for col in tables[tname]['columns']:
                 if col['name'] in pks: col['pk'] = True
-    for m in re.finditer(r"COMMENT\s+ON\s+COLUMN\s+\w+\.(\w+)\.(\w+)\s+IS\s+'(.*?)'", content, re.I | re.DOTALL):
+    # Esquema opcional: soporta "COMMENT ON COLUMN ESQUEMA.TABLA.COL" y "COMMENT ON COLUMN TABLA.COL"
+    for m in re.finditer(r"COMMENT\s+ON\s+COLUMN\s+(?:\w+\.)?(\w+)\.(\w+)\s+IS\s+'(.*?)'", content, re.I | re.DOTALL):
         tname = m.group(1).upper(); cname = m.group(2).upper()
         desc  = m.group(3).strip().replace("''", "'")
         if tname in tables:
@@ -827,22 +846,44 @@ def generar_lineamiento_capacidad_view(request, detalle_id):
     })
 
 
+MAX_SQL_FILES = 5
+
+
 @login_required
 @require_POST
 def cargar_sql_ajax(request, detalle_id):
     get_object_or_404(LineamientoDetalle, pk=detalle_id, usuario_asignado=request.user)
-    sql_file = request.FILES.get('sql_file')
-    if not sql_file:
+    sql_files = request.FILES.getlist('sql_file')
+    if not sql_files:
         return JsonResponse({'ok': False, 'error': 'No se recibio el archivo SQL'})
+    if len(sql_files) > MAX_SQL_FILES:
+        return JsonResponse({'ok': False, 'error': f'Maximo {MAX_SQL_FILES} archivos .sql por carga'})
     try:
-        content = sql_file.read().decode('utf-8', errors='replace')
-        parsed  = _parse_sql(content)
+        schema      = None
+        tables      = {}
+        sequences   = []
+        sql_raw_partes = []
+        duplicadas  = []
+        for sql_file in sql_files:
+            content = sql_file.read().decode('utf-8', errors='replace')
+            parsed  = _parse_sql(content)
+            if parsed['schema'] and not schema:
+                schema = parsed['schema']
+            for tname, tdata in parsed['tables'].items():
+                if tname in tables:
+                    duplicadas.append(tname)
+                tables[tname] = tdata
+            for seq in parsed['sequences']:
+                if seq not in sequences:
+                    sequences.append(seq)
+            sql_raw_partes.append(content)
         return JsonResponse({
             'ok': True,
-            'schema':    parsed['schema'],
-            'tables':    parsed['tables'],
-            'sequences': parsed['sequences'],
-            'sql_raw':   content,
+            'schema':     schema,
+            'tables':     tables,
+            'sequences':  sequences,
+            'sql_raw':    '\n\n'.join(sql_raw_partes),
+            'duplicadas': duplicadas,
         })
     except Exception as e:
         return JsonResponse({'ok': False, 'error': str(e)})

@@ -212,6 +212,15 @@
 
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
   <script>
+    // Forzar pegado como texto plano en cualquier celda editable (evita pegar tablas/celdas de Excel)
+    document.addEventListener('paste', function(e){
+      const target = e.target.closest && e.target.closest('[contenteditable="true"]');
+      if(!target) return;
+      e.preventDefault();
+      const texto = (e.clipboardData || window.clipboardData).getData('text/plain');
+      document.execCommand('insertText', false, texto);
+    }, true);
+
     const CSRF          = '{{ csrf_token }}';
     const CHAT_URL      = '{% url "chat_software" detalle.pk %}';
     const FINALIZAR_URL = '{% url "finalizar_lineamiento" detalle.pk %}';

@@ -131,14 +131,14 @@
       <div class="upload-zone" id="uploadZone">
         <div class="upload-box" id="dropZone" onclick="document.getElementById('sqlFileInput').click()">
           <i class="bi bi-file-earmark-code"></i>
-          <p><strong>Arrastra tu archivo .sql aquí</strong><br>o haz clic para seleccionarlo</p>
-          <span class="hint">Solo archivos .sql de Oracle</span>
+          <p><strong>Arrastra tus archivos .sql aquí</strong><br>o haz clic para seleccionarlos</p>
+          <span class="hint">Solo archivos .sql de Oracle · máximo 5 archivos</span>
         </div>
-        <input type="file" id="sqlFileInput" accept=".sql" style="display:none;">
+        <input type="file" id="sqlFileInput" accept=".sql" multiple style="display:none;">
         <button class="btn-cargar" id="btnCargarSQL" disabled>
           <i class="bi bi-upload"></i> Cargar y Analizar
         </button>
-        <p id="fileSelectedName" style="font-size:.82rem;color:#6b7280;"></p>
+        <ul id="fileSelectedName" style="font-size:.82rem;color:#6b7280;list-style:none;padding:0;margin:6px 0 0;"></ul>
       </div>
 
       <!-- Tabs -->
@@ -242,6 +242,15 @@
 
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
   <script>
+    // Forzar pegado como texto plano en cualquier celda editable (evita pegar tablas/celdas de Excel)
+    document.addEventListener('paste', function(e){
+      const target = e.target.closest && e.target.closest('[contenteditable="true"]');
+      if(!target) return;
+      e.preventDefault();
+      const texto = (e.clipboardData || window.clipboardData).getData('text/plain');
+      document.execCommand('insertText', false, texto);
+    }, true);
+
     const CSRF          = '{{ csrf_token }}';
     const CARGAR_URL    = '{% url "cargar_sql" detalle.pk %}';
     const DIAGRAMA_URL  = '{% url "diagrama_personalizado" detalle.pk %}';
@@ -392,9 +401,9 @@
     document.getElementById('btnReiniciarSQL')?.addEventListener('click',()=>{
       if(!confirm('\u00bfReiniciar? Se perder\u00e1 el an\u00e1lisis actual del SQL.')) return;
       SCHEMA=''; TABLES={}; SEQUENCES=[];
-      sqlFile=null;
+      sqlFiles=[];
       document.getElementById('sqlFileInput').value='';
-      document.getElementById('fileSelectedName').textContent='';
+      document.getElementById('fileSelectedName').innerHTML='';
       document.getElementById('btnCargarSQL').disabled=true;
       document.getElementById('uploadZone').style.display='flex';
       document.getElementById('tabsPanel').classList.remove('visible');
@@ -408,23 +417,46 @@
     });
 
     // ── UPLOAD ──
-    let sqlFile=null;
+    const MAX_SQL_FILES=5;
+    let sqlFiles=[];
     const sqlInput=document.getElementById('sqlFileInput');
     const btnCargar=document.getElementById('btnCargarSQL');
     const dropZone=document.getElementById('dropZone');
 
-    sqlInput.addEventListener('change',e=>{ sqlFile=e.target.files[0]; if(sqlFile){document.getElementById('fileSelectedName').textContent=sqlFile.name; btnCargar.disabled=false;} });
+    function actualizarListaArchivos(){
+      const ul=document.getElementById('fileSelectedName');
+      ul.innerHTML=sqlFiles.map(f=>`<li><i class="bi bi-file-earmark-code"></i> ${f.name}</li>`).join('');
+      btnCargar.disabled=sqlFiles.length===0;
+    }
+    function tomarArchivos(fileList){
+      const archivos=Array.from(fileList).filter(f=>f.name.toLowerCase().endsWith('.sql'));
+      if(archivos.length>MAX_SQL_FILES){
+        alert(`Máximo ${MAX_SQL_FILES} archivos .sql por carga. Se tomarán los primeros ${MAX_SQL_FILES}.`);
+      }
+      sqlFiles=archivos.slice(0,MAX_SQL_FILES);
+      actualizarListaArchivos();
+    }
+
+    sqlInput.addEventListener('change',e=>{ tomarArchivos(e.target.files); });
     dropZone.addEventListener('dragover',e=>{e.preventDefault(); dropZone.style.borderColor='var(--bdd)';});
     dropZone.addEventListener('dragleave',()=>{dropZone.style.borderColor='#c4b5fd';});
-    dropZone.addEventListener('drop',e=>{e.preventDefault(); dropZone.style.borderColor='#c4b5fd'; sqlFile=e.dataTransfer.files[0]; if(sqlFile){document.getElementById('fileSelectedName').textContent=sqlFile.name; btnCargar.disabled=false;}});
+    dropZone.addEventListener('drop',e=>{e.preventDefault(); dropZone.style.borderColor='#c4b5fd'; tomarArchivos(e.dataTransfer.files);});
 
     btnCargar.addEventListener('click',()=>{
-      if(!sqlFile) return;
-      const fd=new FormData(); fd.append('sql_file',sqlFile);
-      btnCargar.disabled=true; mostrarLoading('Analizando el archivo SQL...');
+      if(!sqlFiles.length) return;
+      const fd=new FormData();
+      sqlFiles.forEach(f=>fd.append('sql_file',f));
+      btnCargar.disabled=true; mostrarLoading('Analizando el/los archivo(s) SQL...');
       fetch(CARGAR_URL,{method:'POST',headers:{'X-CSRFToken':CSRF},body:fd})
       .then(r=>r.json())
-      .then(data=>{ ocultarLoading(); btnCargar.disabled=false; if(!data.ok){alert('Error: '+data.error);return;} procesarSQL(data); })
+      .then(data=>{
+        ocultarLoading(); btnCargar.disabled=false;
+        if(!data.ok){alert('Error: '+data.error);return;}
+        if(data.duplicadas && data.duplicadas.length){
+          alert('Atención: las siguientes tablas estaban repetidas en más de un archivo y se conservó la última versión cargada: '+data.duplicadas.join(', '));
+        }
+        procesarSQL(data);
+      })
       .catch(()=>{ocultarLoading(); btnCargar.disabled=false; alert('Error de conexion.');});
     });
 
