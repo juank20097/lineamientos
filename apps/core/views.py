@@ -42,12 +42,18 @@ def servir_archivo_blob(request, blob_id):
     """Sirve un archivo (diagrama, PDF de Formalizacion, certificado .p12)
     guardado como BLOB en Postgres (ver apps/core/storage.py). Reemplaza el
     .url que Django genera para FileField/ImageField en storage de
-    filesystem, ya que un BLOB no tiene una ruta servible directamente."""
+    filesystem, ya que un BLOB no tiene una ruta servible directamente.
+
+    as_attachment=True es necesario para que Django emita
+    'Content-Disposition: attachment; filename=...' - sin esto (el default es
+    'inline') algunos navegadores descargan el archivo sin el nombre/extension
+    correctos al usar "Guardar como", aunque el contenido binario sea valido."""
     blob = get_object_or_404(ArchivoBlob, pk=blob_id)
-    content_type = mimetypes.guess_type(blob.nombre_original)[0] or 'application/octet-stream'
+    nombre = os.path.basename(blob.nombre_original)
+    content_type = mimetypes.guess_type(nombre)[0] or 'application/octet-stream'
     return FileResponse(
         BytesIO(bytes(blob.contenido)), content_type=content_type,
-        filename=os.path.basename(blob.nombre_original),
+        as_attachment=True, filename=nombre,
     )
 
 

@@ -62,4 +62,9 @@ class PostgresBlobStorage(Storage):
         return reverse('servir_archivo_blob', args=[name])
 
     def get_available_name(self, name, max_length=None):
-        return str(uuid.uuid4())
+        # NO generar un UUID aqui: el nombre real (ej. "PAS-MLT-...-.pdf") debe
+        # preservarse para que _save() lo guarde en ArchivoBlob.nombre_original
+        # y la descarga (servir_archivo_blob) pueda usarlo como Content-Disposition
+        # filename. La unicidad del blob la da su propia PK (uuid.uuid4() en
+        # _save), no el nombre - asi que no hace falta reemplazarlo aqui.
+        return name
