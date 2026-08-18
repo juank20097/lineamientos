@@ -173,7 +173,7 @@
               <div id="diagramaCanvas">
                 <svg class="fk-lines" id="fkSvg"></svg>
               </div>
-              <img id="diagramaImgPersonalizado" style="display:none;max-width:100%;max-height:100%;object-fit:contain;">
+              <img id="diagramaImgPersonalizado" style="display:none;max-width:none;object-fit:contain;">
             </div>
           </div>
 
@@ -478,6 +478,9 @@
 
     function aplicarZoom(){
       canvas.style.transform=`scale(${zoomLevel})`;
+      const imgPersonalizada=document.getElementById('diagramaImgPersonalizado');
+      imgPersonalizada.style.transformOrigin='top left';
+      imgPersonalizada.style.transform=`scale(${zoomLevel})`;
       document.getElementById('zoomLabel').textContent=Math.round(zoomLevel*100)+'%';
     }
     document.getElementById('btnZoomIn').addEventListener('click',()=>{zoomLevel=Math.min(3,zoomLevel+0.1); aplicarZoom();});
@@ -502,12 +505,14 @@
       imgDiagramaPersonalizado.style.display = 'block';
       canvas.style.display = 'none';
       btnRestaurarDiagrama.style.display = 'inline-flex';
+      aplicarZoom();
     }
     function ocultarDiagramaPersonalizado(){
       imgDiagramaPersonalizado.style.display = 'none';
       imgDiagramaPersonalizado.src = '';
       canvas.style.display = '';
       btnRestaurarDiagrama.style.display = 'none';
+      aplicarZoom();
     }
 
     if(DIAGRAMA_PERSONALIZADO_URL){ mostrarDiagramaPersonalizado(DIAGRAMA_PERSONALIZADO_URL); }
