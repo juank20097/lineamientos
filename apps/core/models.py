@@ -283,6 +283,7 @@ class Autoridad(models.Model):
 class Guideline(models.Model):
     TIPO_CHOICES = [
         ('SW', 'Software'), ('BDD', 'Base de Datos'), ('INF', 'Infraestructura'),
+        ('ALL', 'Transversal (todos los tipos)'),
     ]
     tipo        = models.CharField(max_length=3, choices=TIPO_CHOICES, default='SW', verbose_name='Tipo')
     necesidad   = models.CharField(max_length=300, verbose_name='Necesidad')

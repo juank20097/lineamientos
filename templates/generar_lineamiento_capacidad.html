@@ -173,6 +173,7 @@
     const MODO          = '{{ modo }}';
     const TICKET_NV     = '{{ ticket_nv }}';
     const FILAS_PRECARGA = {{ filas_precarga|safe }};
+    const FILA_INICIAL_TRANSVERSAL = {{ fila_inicial_transversal|safe }};
 
     function mostrarLoading(msg){ document.getElementById('loading-msg').textContent=msg||'Procesando...'; document.getElementById('loading-overlay').style.display='flex'; }
     function ocultarLoading(){ document.getElementById('loading-overlay').style.display='none'; }
@@ -294,7 +295,7 @@
     if(FILAS_PRECARGA.length > 0){
       FILAS_PRECARGA.forEach(f=>docBody.appendChild(crearFila(f)));
     } else {
-      docBody.appendChild(crearFila(null));
+      docBody.appendChild(crearFila(FILA_INICIAL_TRANSVERSAL));
     }
     emptyState.style.display='none';
     docTable.style.display='table';

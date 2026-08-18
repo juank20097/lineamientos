@@ -811,6 +811,7 @@ def generar_lineamiento_bdd_view(request, detalle_id):
         'bdd_precarga':   json.dumps(bdd_precarga),
         'hay_borrador': borrador is not None,
         'diagrama_personalizado_url': detalle.diagrama_personalizado.url if detalle.diagrama_personalizado else '',
+        'fila_inicial_transversal': json.dumps(_fila_inicial_transversal()),
     })
 
 
@@ -843,6 +844,7 @@ def generar_lineamiento_capacidad_view(request, detalle_id):
         'filas_precarga': filas_precarga,
         'hay_borrador': borrador is not None,
         'diagrama_personalizado_url': detalle.diagrama_personalizado.url if detalle.diagrama_personalizado else '',
+        'fila_inicial_transversal': json.dumps(_fila_inicial_transversal()),
     })
 
 
@@ -910,6 +912,16 @@ def diagrama_personalizado_ajax(request, detalle_id):
 
 
 # ── LOGICA GUIDELINES ─────────────────────────────────────────────────────────
+
+def _fila_inicial_transversal():
+    """Fila de Consideracion Tecnica (Base_Conocimiento, tipo=ALL) que se
+    precarga automaticamente como primera fila en los 3 tipos de lineamiento
+    cuando no hay filas previas (borrador ni version anterior)."""
+    g = Guideline.objects.filter(tipo='ALL', necesidad='Consideración Técnica').first()
+    if not g:
+        return None
+    return {'necesidad': g.necesidad, 'lineamiento': g.lineamiento, 'mecanismo': '', 'observacion': ''}
+
 
 def _calcular_ids(info):
     ids = []; software = info.get('software', ''); ws_tipo = info.get('ws_tipo', '')
@@ -1726,6 +1738,7 @@ def generar_lineamiento_view(request, detalle_id):
         'ultima': ultima, 'ya_generado': ultima is not None,
         'modo': modo, 'ticket_nv': ticket_nv, 'filas_precarga': filas_precarga,
         'hay_borrador': borrador is not None, 'mensajes_previos': mensajes_previos,
+        'fila_inicial_transversal': json.dumps(_fila_inicial_transversal()),
     })
 
 
