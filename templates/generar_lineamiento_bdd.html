@@ -686,17 +686,37 @@
         });
         // PKs
         if(tdata.pks.length){
-          lines.push(`    CONSTRAINT ${tname.toLowerCase()}_pk PRIMARY KEY ( ${tdata.pks.join(', ')} )`);
+          const pkName = tdata.pk_name || `${tname.toLowerCase()}_pk`;
+          lines.push(`    CONSTRAINT ${pkName} PRIMARY KEY ( ${tdata.pks.join(', ')} )`);
         }
         sql+=lines.join(',\n')+'\n);\n\n';
+        // Table comment
+        if(tdata.table_comment){
+          sql+=`COMMENT ON TABLE ${schema}.${tname} IS\n    '${tdata.table_comment}';\n\n`;
+        }
         // Comments
         tdata.columns.filter(c=>c.description).forEach(col=>{
           sql+=`COMMENT ON COLUMN ${schema}.${tname}.${col.name} IS\n    '${col.description}';\n`;
         });
         sql+='\n';
+        // CHECKs
+        (tdata.checks||[]).forEach(chk=>{
+          sql+=`ALTER TABLE ${tname}\n    ADD CONSTRAINT ${chk.name}\n    CHECK (${chk.expr});\n\n`;
+        });
+        // UNIQUEs
+        (tdata.uniques||[]).forEach(uq=>{
+          sql+=`ALTER TABLE ${tname}\n    ADD CONSTRAINT ${uq.name}\n    UNIQUE ( ${uq.columns.join(', ')} );\n\n`;
+        });
         // FKs
         tdata.fks.forEach(fk=>{
-          sql+=`ALTER TABLE ${tname} ADD CONSTRAINT ${tname.toLowerCase()}_fk FOREIGN KEY ( ${fk.columns.join(', ')} ) REFERENCES ${fk.ref_table} ( ${fk.ref_columns.join(', ')} );\n`;
+          const fkName = fk.name || `${tname.toLowerCase()}_fk`;
+          const refTable = fk.ref_schema ? `${fk.ref_schema}.${fk.ref_table}` : fk.ref_table;
+          sql+=`ALTER TABLE ${tname} ADD CONSTRAINT ${fkName} FOREIGN KEY ( ${fk.columns.join(', ')} ) REFERENCES ${refTable} ( ${fk.ref_columns.join(', ')} );\n`;
+        });
+        // Indexes
+        (tdata.indexes||[]).forEach(idx=>{
+          const cols = idx.columns.map(c=>`${c.name} ${c.order||'ASC'}`).join(', ');
+          sql+=`CREATE ${idx.unique?'UNIQUE ':''}INDEX ${idx.name}\n   ON ${tname} (${cols});\n\n`;
         });
       }
       // Sequences

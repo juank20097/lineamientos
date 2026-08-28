@@ -726,17 +726,35 @@ def _parse_sql(content):
     # Se busca el '(' de apertura y se extrae el bloque respetando parentesis anidados,
     # en vez de un regex no-greedy que puede cortar en el primer ')' de otra sentencia
     # (p.ej. un ALTER TABLE ... PRIMARY KEY (...) que aparezca antes del cierre real).
+    duplicadas = []
     for m in re.finditer(r'CREATE\s+TABLE\s+(?:\w+\.)?(\w+)\s*\(', content, re.I):
         tname = m.group(1).upper()
+        if tname in tables:
+            duplicadas.append(tname)
+            continue
         body, _fin = _extraer_bloque_parentesis(content, m.end() - 1)
-        tables[tname] = {'columns': _parse_columnas(body), 'pks': [], 'fks': []}
+        tables[tname] = {'columns': _parse_columnas(body), 'pks': [], 'pk_name': None, 'fks': [], 'indexes': [], 'checks': [], 'uniques': [], 'table_comment': ''}
         # PKs inline dentro del CREATE TABLE: CONSTRAINT xxx PRIMARY KEY (col)
-        pk_m = re.search(r'CONSTRAINT\s+\w+\s+PRIMARY\s+KEY\s*\(([^)]+)\)', body, re.I)
+        pk_m = re.search(r'CONSTRAINT\s+(\w+)\s+PRIMARY\s+KEY\s*\(([^)]+)\)', body, re.I)
         if pk_m:
-            pks = [p.strip().upper() for p in pk_m.group(1).split(',')]
+            pks = [p.strip().upper() for p in pk_m.group(2).split(',')]
             tables[tname]['pks'] = pks
+            tables[tname]['pk_name'] = pk_m.group(1)
             for col in tables[tname]['columns']:
                 if col['name'] in pks: col['pk'] = True
+        # CHECKs inline dentro del CREATE TABLE: CONSTRAINT xxx CHECK (expr)
+        for chk_m in re.finditer(r'CONSTRAINT\s+(\w+)\s+CHECK\s*\(', body, re.I):
+            expr, _fin = _extraer_bloque_parentesis(body, chk_m.end() - 1)
+            tables[tname]['checks'].append({'name': chk_m.group(1), 'expr': expr.strip()})
+        # UNIQUEs inline dentro del CREATE TABLE: CONSTRAINT xxx UNIQUE (col, ...)
+        for uq_m in re.finditer(r'CONSTRAINT\s+(\w+)\s+UNIQUE\s*\(([^)]+)\)', body, re.I):
+            cols = [c.strip().upper() for c in uq_m.group(2).split(',')]
+            tables[tname]['uniques'].append({'name': uq_m.group(1), 'columns': cols})
+    # COMMENT ON TABLE ESQUEMA.TABLA IS '...' (o sin esquema)
+    for m in re.finditer(r"COMMENT\s+ON\s+TABLE\s+(?:\w+\.)?(\w+)\s+IS\s+'(.*?)'", content, re.I | re.DOTALL):
+        tname = m.group(1).upper()
+        if tname in tables:
+            tables[tname]['table_comment'] = m.group(2).strip().replace("''", "'")
     # Esquema opcional: soporta "COMMENT ON COLUMN ESQUEMA.TABLA.COL" y "COMMENT ON COLUMN TABLA.COL"
     for m in re.finditer(r"COMMENT\s+ON\s+COLUMN\s+(?:\w+\.)?(\w+)\.(\w+)\s+IS\s+'(.*?)'", content, re.I | re.DOTALL):
         tname = m.group(1).upper(); cname = m.group(2).upper()
@@ -745,26 +763,61 @@ def _parse_sql(content):
             for col in tables[tname]['columns']:
                 if col['name'] == cname: col['description'] = desc; break
     for m in re.finditer(
-        r'ALTER\s+TABLE\s+(?:\w+\.)?(\w+)\s+ADD\s+CONSTRAINT\s+\w+\s+PRIMARY\s+KEY\s*\(([^)]+)\)',
+        r'ALTER\s+TABLE\s+(?:\w+\.)?(\w+)\s+ADD\s+CONSTRAINT\s+(\w+)\s+PRIMARY\s+KEY\s*\(([^)]+)\)',
         content, re.I | re.DOTALL
     ):
-        tname = m.group(1).upper(); pks = [p.strip().upper() for p in m.group(2).split(',')]
+        tname = m.group(1).upper(); pks = [p.strip().upper() for p in m.group(3).split(',')]
         if tname in tables:
             tables[tname]['pks'] = pks
+            tables[tname]['pk_name'] = m.group(2)
             for col in tables[tname]['columns']:
                 if col['name'] in pks: col['pk'] = True
     for m in re.finditer(
-        r'ALTER\s+TABLE\s+(?:\w+\.)?(\w+)\s+ADD\s+CONSTRAINT\s+\w+\s+FOREIGN\s+KEY\s*\(([^)]+)\)\s+REFERENCES\s+(?:\w+\.)?(\w+)\s*\(([^)]+)\)',
+        r'ALTER\s+TABLE\s+(?:\w+\.)?(\w+)\s+ADD\s+CONSTRAINT\s+(\w+)\s+FOREIGN\s+KEY\s*\(([^)]+)\)\s+REFERENCES\s+(?:(\w+)\.)?(\w+)\s*\(([^)]+)\)',
         content, re.I | re.DOTALL
     ):
         tname = m.group(1).upper()
         if tname in tables:
             tables[tname]['fks'].append({
-                'columns':     [c.strip().upper() for c in m.group(2).split(',')],
-                'ref_table':   m.group(3).upper(),
-                'ref_columns': [c.strip().upper() for c in m.group(4).split(',')],
+                'name':        m.group(2),
+                'columns':     [c.strip().upper() for c in m.group(3).split(',')],
+                'ref_schema':  m.group(4).upper() if m.group(4) else None,
+                'ref_table':   m.group(5).upper(),
+                'ref_columns': [c.strip().upper() for c in m.group(6).split(',')],
             })
-    return {'schema': schema, 'tables': tables, 'sequences': sequences}
+    for m in re.finditer(
+        r'ALTER\s+TABLE\s+(?:\w+\.)?(\w+)\s+ADD\s+CONSTRAINT\s+(\w+)\s+CHECK\s*\(',
+        content, re.I
+    ):
+        tname = m.group(1).upper()
+        if tname in tables:
+            expr, _fin = _extraer_bloque_parentesis(content, m.end() - 1)
+            tables[tname]['checks'].append({'name': m.group(2), 'expr': expr.strip()})
+    for m in re.finditer(
+        r'ALTER\s+TABLE\s+(?:\w+\.)?(\w+)\s+ADD\s+CONSTRAINT\s+(\w+)\s+UNIQUE\s*\(([^)]+)\)',
+        content, re.I | re.DOTALL
+    ):
+        tname = m.group(1).upper()
+        if tname in tables:
+            cols = [c.strip().upper() for c in m.group(3).split(',')]
+            tables[tname]['uniques'].append({'name': m.group(2), 'columns': cols})
+    for m in re.finditer(
+        r'CREATE\s+(UNIQUE\s+)?INDEX\s+(?:\w+\.)?(\w+)\s+ON\s+(?:\w+\.)?(\w+)\s*\(([^)]+)\)',
+        content, re.I | re.DOTALL
+    ):
+        tname = m.group(3).upper()
+        if tname in tables:
+            cols = []
+            for c in m.group(4).split(','):
+                c = c.strip()
+                cm = re.match(r'(\w+)\s*(ASC|DESC)?', c, re.I)
+                cols.append({'name': cm.group(1).upper(), 'order': (cm.group(2) or 'ASC').upper()})
+            tables[tname]['indexes'].append({
+                'name':   m.group(2),
+                'unique': bool(m.group(1)),
+                'columns': cols,
+            })
+    return {'schema': schema, 'tables': tables, 'sequences': sequences, 'duplicadas': duplicadas}
 
 
 # ── VISTAS BDD ────────────────────────────────────────────────────────────────
@@ -869,6 +922,7 @@ def cargar_sql_ajax(request, detalle_id):
         for sql_file in sql_files:
             content = sql_file.read().decode('utf-8', errors='replace')
             parsed  = _parse_sql(content)
+            duplicadas.extend(parsed.get('duplicadas', []))
             if parsed['schema'] and not schema:
                 schema = parsed['schema']
             for tname, tdata in parsed['tables'].items():
@@ -879,13 +933,23 @@ def cargar_sql_ajax(request, detalle_id):
                 if seq not in sequences:
                     sequences.append(seq)
             sql_raw_partes.append(content)
+        duplicadas = sorted(set(duplicadas))
+        if duplicadas:
+            return JsonResponse({
+                'ok': False,
+                'error': (
+                    'El SQL contiene la(s) tabla(s) duplicada(s): ' + ', '.join(duplicadas) +
+                    '. Elimina la definicion repetida antes de continuar; no se puede guardar '
+                    'mientras exista una tabla con el mismo nombre definida mas de una vez.'
+                ),
+                'duplicadas': duplicadas,
+            })
         return JsonResponse({
             'ok': True,
             'schema':     schema,
             'tables':     tables,
             'sequences':  sequences,
             'sql_raw':    '\n\n'.join(sql_raw_partes),
-            'duplicadas': duplicadas,
         })
     except Exception as e:
         return JsonResponse({'ok': False, 'error': str(e)})

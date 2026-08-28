@@ -85,7 +85,7 @@
           <tr>
             <th class="py-3 ps-4">Ticket Principal</th>
             <th>Tipo(s)</th><th>Ticket(s) Hijo</th><th>Responsable(s)</th>
-            <th>Fecha Asignado</th><th style="min-width:140px;">Progreso</th><th>Acciones</th>
+            <th>Fecha Asignado</th><th>Tiempo Atención</th><th style="min-width:140px;">Progreso</th><th>Acciones</th>
           </tr>
         </thead>
         <tbody>
@@ -109,6 +109,7 @@
               <span class="d-block">{{ d.usuario_asignado.get_full_name|default:d.usuario_asignado.username }}</span>
             {% endfor %}</td>
             <td style="color:#6b7280;">{{ sol.fecha_creacion|date:"d/m/Y" }}</td>
+            <td class="td-tiempo-atencion" data-timestamp="{{ sol.fecha_creacion|date:"c" }}" style="white-space:nowrap;"></td>
             <td class="td-progreso" data-sol="{{ sol.pk }}" style="min-width:140px;">
               <div style="display:flex;align-items:center;gap:8px;">
                 <div style="flex:1;background:#e5e7eb;border-radius:20px;height:8px;overflow:hidden;">
@@ -165,6 +166,53 @@
             style="background:#dc2626;border:none;border-radius:7px;padding:5px 12px;font-size:.8rem;">
             <i class="bi bi-file-earmark-pdf-fill me-1"></i>PDF
           </a>`;
+        }
+      });
+    })();
+
+    // ── TIEMPO DE ATENCION (tiempo real) ──
+    (function(){
+      const celdas = document.querySelectorAll('.td-tiempo-atencion');
+      if (!celdas.length) return;
+
+      function formatear(ms){
+        if (ms < 0) ms = 0;
+        const minTotal = Math.floor(ms / 60000);
+        const horasTotal = Math.floor(minTotal / 60);
+        const minutos = minTotal % 60;
+        if (horasTotal < 24) {
+          return `${horasTotal} horas, ${minutos} minutos`;
+        }
+        const dias = Math.floor(horasTotal / 24);
+        const horas = horasTotal % 24;
+        return `${dias} días, ${horas} horas`;
+      }
+
+      function claseColor(ms){
+        const dias = ms / 86400000;
+        if (dias < 4) return 'text-success fw-bold';
+        if (dias < 7) return 'text-warning fw-bold';
+        return 'text-danger fw-bold';
+      }
+
+      function actualizar(){
+        const ahora = Date.now();
+        celdas.forEach(td => {
+          const inicio = new Date(td.dataset.timestamp).getTime();
+          const diff = ahora - inicio;
+          td.textContent = formatear(diff);
+          td.className = 'td-tiempo-atencion ' + claseColor(diff);
+        });
+      }
+
+      actualizar();
+      let intervalo = setInterval(actualizar, 60000);
+
+      document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState === 'visible') {
+          clearInterval(intervalo);
+          actualizar();
+          intervalo = setInterval(actualizar, 60000);
         }
       });
     })();
