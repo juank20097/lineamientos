@@ -102,14 +102,39 @@ class AutoridadAdminForm(forms.ModelForm):
 @admin.register(Autoridad)
 class AutoridadAdmin(admin.ModelAdmin):
     form = AutoridadAdminForm
-    list_display    = ('nombre_completo', 'tipo', 'cargo', 'puede_firmar', 'activo', 'fecha_creacion')
-    list_filter     = ('tipo', 'activo')
+    list_display    = ('nombre_completo', 'tipo', 'cargo', 'usuario', 'firma_automatica', 'puede_firmar', 'activo', 'fecha_creacion')
+    list_filter     = ('tipo', 'activo', 'firma_automatica')
     search_fields   = ('nombre_completo', 'cedula', 'correo')
     readonly_fields = ('fecha_creacion',)
+    autocomplete_fields = ('usuario',)
 
     @admin.display(boolean=True, description='Firma digital')
     def puede_firmar(self, obj):
         return obj.puede_firmar
+
+    def save_model(self, request, obj, form, change):
+        from apps.usuarios.models import ROL_AUTORIDAD
+
+        usuario_anterior = None
+        if change:
+            usuario_anterior = Autoridad.objects.filter(pk=obj.pk).values_list('usuario_id', flat=True).first()
+
+        super().save_model(request, obj, form, change)
+
+        # El rol 'autoridad' en Usuario es solo un reflejo de este vinculo: se
+        # agrega automaticamente aqui (nunca desde el formulario de creacion
+        # de Usuario) y se retira si la Autoridad se desvincula de ese usuario.
+        if obj.usuario_id:
+            usuario = obj.usuario
+            if ROL_AUTORIDAD not in usuario.get_roles():
+                usuario.roles = usuario.get_roles() + [ROL_AUTORIDAD]
+                usuario.save(update_fields=['roles'])
+        if usuario_anterior and usuario_anterior != obj.usuario_id:
+            from apps.usuarios.models import Usuario as UsuarioModel
+            anterior = UsuarioModel.objects.filter(pk=usuario_anterior).first()
+            if anterior and ROL_AUTORIDAD in anterior.get_roles():
+                anterior.roles = [r for r in anterior.get_roles() if r != ROL_AUTORIDAD]
+                anterior.save(update_fields=['roles'])
 
 
 # ── GUIDELINE ─────────────────────────────────────────────────────────────────

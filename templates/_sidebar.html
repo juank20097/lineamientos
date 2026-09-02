@@ -1,5 +1,13 @@
 {% load znuny_extras %}
 <aside class="sidebar">
+  {% if request.user.autoridad %}
+  <div class="sidebar-section">
+    <div class="sidebar-section-label">Menu</div>
+    <a href="{% url 'mis_firmas_autoridad' %}" class="sidebar-nav-item {% if seccion_activa == 'firmas-autoridad' %}active{% endif %}">
+      <i class="bi bi-patch-check-fill"></i> Firmas Pendientes
+    </a>
+  </div>
+  {% else %}
   {% if request.user.is_staff %}
   <div class="sidebar-section">
     <div class="sidebar-section-label">Acciones</div>
@@ -45,6 +53,7 @@
     </a>
     {% endif %}
   </div>
+  {% endif %}
   <div class="sidebar-footer">IESS &mdash; DNTI &copy; {% now "Y" %}</div>
 </aside>
 

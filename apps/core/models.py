@@ -35,6 +35,10 @@ def _ruta_diagrama_personalizado(instance, filename):
     return f'{carpeta}/{filename}'
 
 
+def _ruta_imagen_lineamiento(instance, filename):
+    return f'imagenes_bdd/{filename}'
+
+
 class Lineamiento(models.Model):
     ticket_principal = models.CharField(max_length=50, verbose_name='Ticket Principal')
     id_numerico = models.CharField(
@@ -86,6 +90,26 @@ class LineamientoDetalle(models.Model):
     @property
     def finalizado(self):
         return self.generados.filter(es_borrador=False).exists()
+
+
+MAX_IMAGENES_LINEAMIENTO = 3
+
+
+class LineamientoImagen(models.Model):
+    """Imagenes adicionales (hasta MAX_IMAGENES_LINEAMIENTO) que se agregan
+    al documento final, una por hoja, ademas del diagrama personalizado."""
+    detalle = models.ForeignKey(
+        LineamientoDetalle, on_delete=models.CASCADE, related_name='imagenes'
+    )
+    imagen = models.ImageField(upload_to=_ruta_imagen_lineamiento, storage=blob_storage)
+    orden = models.PositiveSmallIntegerField(default=0)
+
+    class Meta:
+        verbose_name = 'Imagen de Lineamiento'; verbose_name_plural = 'Imagenes de Lineamiento'
+        ordering = ['orden', 'id']
+
+    def __str__(self):
+        return f"Imagen {self.orden} - {self.detalle}"
 
 
 class LineamientoGenerado(models.Model):
@@ -261,6 +285,20 @@ class Autoridad(models.Model):
     clave_p12 = models.CharField(
         max_length=255, verbose_name='Contraseña del certificado', blank=True, default='',
     )
+    usuario = models.OneToOneField(
+        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='autoridad', verbose_name='Usuario para autofirma',
+        help_text='Si se asigna, este usuario puede iniciar sesion y ver esta Autoridad en su '
+                  'tabla de firmas pendientes.',
+    )
+    firma_automatica = models.BooleanField(
+        default=True, verbose_name='Firmar automaticamente',
+        help_text='Si esta activo, el sistema firma solo con las credenciales guardadas arriba '
+                  'apenas le toca su turno (revisor/aprobador), sin intervencion humana. Si se '
+                  'desactiva, el documento queda pendiente aunque haya credenciales guardadas: '
+                  'el usuario vinculado debe entrar y firmarlo el mismo desde su tabla de '
+                  'pendientes, ingresando cedula/password/.p12 (que tambien se guardan aqui).',
+    )
     activo = models.BooleanField(default=True, verbose_name='Activo')
     fecha_creacion = models.DateTimeField(auto_now_add=True)
 
@@ -278,6 +316,26 @@ class Autoridad(models.Model):
 
     def __str__(self):
         return f"{self.get_tipo_display()}: {self.nombre_completo}"
+
+
+class FormalizacionFirmaAutoridad(models.Model):
+    """Estado individual de la firma de una Autoridad (Revisor/Aprobador)
+    sobre una Formalizacion. Solo se crea/consulta cuando la Autoridad tiene
+    un usuario vinculado (ver Autoridad.usuario) y debe firmar ella misma
+    desde su tabla de pendientes, en vez de que el sistema firme
+    automaticamente con las credenciales guardadas en Autoridad."""
+    formalizacion = models.ForeignKey(Formalizacion, on_delete=models.CASCADE, related_name='firmas_autoridad')
+    autoridad = models.ForeignKey(Autoridad, on_delete=models.CASCADE, related_name='firmas')
+    firmado = models.BooleanField(default=False)
+    fecha_firma = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        verbose_name = 'Firma de Autoridad'; verbose_name_plural = 'Firmas de Autoridad'
+        unique_together = ('formalizacion', 'autoridad')
+
+    def __str__(self):
+        estado = 'Firmado' if self.firmado else 'Pendiente'
+        return f"{self.autoridad.get_tipo_display()} - {self.autoridad.nombre_completo} ({estado})"
 
 
 class Guideline(models.Model):

@@ -29,6 +29,8 @@ from .models import (
     Lineamiento, LineamientoDetalle, Guideline,
     LineamientoGenerado, LineamientoGeneradoFila,
     Formalizacion, FormalizacionFirma, Autoridad, ArchivoBlob,
+    LineamientoImagen, MAX_IMAGENES_LINEAMIENTO,
+    FormalizacionFirmaAutoridad,
 )
 from .utils import (
     generar_id_lote, FirmaECError, firmar_documento_acumulativo,
@@ -509,6 +511,20 @@ def _generar_pdf_lineamientos(lin, version_map, watermark=False, tipos_incluir=N
 
                 story.append(drawing)
 
+            # ── HOJAS DE IMAGENES ADICIONALES (una por hoja) ──
+            for img_obj in bdd_detalle.imagenes.order_by('orden', 'id'):
+                story.append(PageBreak())
+                story += cabecera()
+                story.append(Paragraph('IMAGEN ADJUNTA', estilo('dr', fontName='Helvetica-Bold', fontSize=10, alignment=TA_CENTER, textColor=BDD_C)))
+                story.append(Spacer(1, 4*mm))
+                AVAIL_W = PAGE_W - 2 * MARGIN
+                AVAIL_H = PAGE_H - 7 * cm
+                img = RLImage(BytesIO(img_obj.imagen.read()))
+                scale = min(AVAIL_W / img.imageWidth, AVAIL_H / img.imageHeight, 1.0)
+                img.drawWidth  = img.imageWidth * scale
+                img.drawHeight = img.imageHeight * scale
+                story.append(img)
+
             # ── HOJA TABLAS BDD ──
             story.append(PageBreak())
             story += cabecera()
@@ -857,6 +873,9 @@ def generar_lineamiento_bdd_view(request, detalle_id):
                 'tables':    ultima.bdd_tables or {},
                 'sequences': ultima.bdd_sequences or [],
             }
+    imagenes_precarga = [
+        {'id': img.pk, 'url': img.imagen.url} for img in detalle.imagenes.order_by('orden', 'id')
+    ]
     return render(request, 'generar_lineamiento_bdd.html', {
         'detalle': detalle, 'ultima': ultima, 'ya_generado': ultima is not None,
         'modo': modo, 'ticket_nv': ticket_nv,
@@ -864,6 +883,8 @@ def generar_lineamiento_bdd_view(request, detalle_id):
         'bdd_precarga':   json.dumps(bdd_precarga),
         'hay_borrador': borrador is not None,
         'diagrama_personalizado_url': detalle.diagrama_personalizado.url if detalle.diagrama_personalizado else '',
+        'imagenes_precarga': json.dumps(imagenes_precarga),
+        'max_imagenes': MAX_IMAGENES_LINEAMIENTO,
         'fila_inicial_transversal': json.dumps(_fila_inicial_transversal()),
     })
 
@@ -973,6 +994,36 @@ def diagrama_personalizado_ajax(request, detalle_id):
     detalle.diagrama_personalizado = imagen
     detalle.save(update_fields=['diagrama_personalizado'])
     return JsonResponse({'ok': True, 'url': detalle.diagrama_personalizado.url})
+
+
+@login_required
+@require_POST
+def imagenes_lineamiento_ajax(request, detalle_id):
+    """Sube una imagen adicional (hasta MAX_IMAGENES_LINEAMIENTO) para el
+    detalle. Cada imagen se incluye en el documento final, una por hoja."""
+    detalle = get_object_or_404(LineamientoDetalle, pk=detalle_id, usuario_asignado=request.user)
+    actuales = detalle.imagenes.count()
+    if actuales >= MAX_IMAGENES_LINEAMIENTO:
+        return JsonResponse({'ok': False, 'error': f'Maximo {MAX_IMAGENES_LINEAMIENTO} imagenes por lineamiento'})
+    imagen = request.FILES.get('imagen')
+    if not imagen:
+        return JsonResponse({'ok': False, 'error': 'No se recibio la imagen'})
+    obj = LineamientoImagen.objects.create(detalle=detalle, imagen=imagen, orden=actuales)
+    return JsonResponse({'ok': True, 'id': obj.pk, 'url': obj.imagen.url})
+
+
+@login_required
+@require_POST
+def eliminar_imagen_lineamiento_ajax(request, detalle_id, imagen_id):
+    detalle = get_object_or_404(LineamientoDetalle, pk=detalle_id, usuario_asignado=request.user)
+    imagen = get_object_or_404(LineamientoImagen, pk=imagen_id, detalle=detalle)
+    imagen.imagen.delete(save=False)
+    imagen.delete()
+    for i, img in enumerate(detalle.imagenes.order_by('orden', 'id')):
+        if img.orden != i:
+            img.orden = i
+            img.save(update_fields=['orden'])
+    return JsonResponse({'ok': True})
 
 
 # ── LOGICA GUIDELINES ─────────────────────────────────────────────────────────
@@ -1104,14 +1155,26 @@ def crear_hijo_ajax(request):
 @login_required
 def home_view(request):
     """Repositorio publico (visible para staff y no-staff por igual) de
-    Lineamientos ya 100% formalizados: todas las firmas de responsables
-    completas Y el ticket padre cerrado en Znuny. No incluye borradores,
-    procesos en curso, ni formalizaciones atendidas pero sin cerrar."""
+    Lineamientos ya 100% formalizados por los responsables Y con el ticket
+    padre cerrado en Znuny. No incluye borradores ni procesos en curso.
+
+    El cierre del ticket ya NO espera a que las Autoridades con autofirma
+    manual (ej. el Aprobador) hayan firmado -ver _cerrar_ticket_padre_si_formalizado-
+    asi que un documento puede aparecer aqui con su firma de Autoridad
+    todavia pendiente; la columna 'Autoridad' en el template lo marca con
+    una X en ese caso y se actualiza a check apenas esa Autoridad firma
+    (lo que ademas reemplaza el PDF por la version con su firma incluida)."""
+    if getattr(request.user, 'autoridad', None) is not None:
+        return redirect('mis_firmas_autoridad')
+
     formalizaciones = (
         Formalizacion.objects
         .filter(ticket_padre_cerrado=True)
         .select_related('lineamiento')
-        .prefetch_related('firmas__detalle', 'firmas__responsable', 'lineamiento__detalles')
+        .prefetch_related(
+            'firmas__detalle', 'firmas__responsable', 'lineamiento__detalles',
+            'firmas_autoridad__autoridad',
+        )
         .order_by('-fecha_cierre_ticket_padre')
     )
     # `formalizado` es una property (no un campo de BD): filtrar en Python
@@ -1127,6 +1190,12 @@ def home_view(request):
             {firma.detalle.tipo for firma in f.firmas.all()},
             key=lambda t: ORDEN_TIPOS.index(t) if t in ORDEN_TIPOS else 99,
         )
+        # Firmas de Autoridad pendientes (ej. Aprobador con firma_automatica
+        # desactivada): si hay alguna sin firmar, el documento aun no tiene
+        # TODAS las firmas aunque el ticket ya este cerrado.
+        f.autoridades_pendientes = [
+            fa.autoridad for fa in f.firmas_autoridad.all() if not fa.firmado
+        ]
 
     return render(request, 'home.html', {
         'repositorio': repositorio,
@@ -1513,15 +1582,57 @@ def enviar_alerta_firma_pendiente(autoridad, lineamiento, pdf_bytes, nombre_pdf)
         )
 
 
+def _firma_autoridad_pendiente(formalizacion, autoridad):
+    """Obtiene (creando si hace falta) el registro FormalizacionFirmaAutoridad
+    que trackea el estado de firma de `autoridad` sobre `formalizacion`. Solo
+    tiene sentido cuando la Autoridad tiene un usuario vinculado (autofirma
+    manual); para autoridades sin usuario se sigue usando el flujo automatico
+    / correo de siempre, sin crear este registro."""
+    firma, _ = FormalizacionFirmaAutoridad.objects.get_or_create(
+        formalizacion=formalizacion, autoridad=autoridad,
+    )
+    return firma
+
+
+def _autoridad_pendiente_manual(formalizacion, autoridad):
+    """True si `autoridad` debe quedar pendiente de autofirma manual para
+    esta Formalizacion (firma_automatica desactivado + usuario vinculado) Y
+    todavia no la ha firmado."""
+    if autoridad.firma_automatica or not autoridad.usuario_id:
+        return False
+    return not FormalizacionFirmaAutoridad.objects.filter(
+        formalizacion=formalizacion, autoridad=autoridad, firmado=True,
+    ).exists()
+
+
 def _cerrar_ticket_padre_si_formalizado(formalizacion):
-    """Al completarse la ultima firma: parte del PDF YA firmado por los
-    responsables (formalizacion.documento), intenta estampar automaticamente
-    sobre el las firmas de Revisor y Aprobador (si hay Autoridad activa
-    configurada), cierra el Ticket Padre en Znuny adjuntando ese PDF como
-    evidencia, y registra el cierre para no repetirlo. No falla el flujo de
-    firma si el cierre en Znuny no se puede ejecutar, ni si la firma
-    automatica de autoridades falla; en ambos casos solo queda constancia en
-    logs y el proceso continua con lo que si se pudo completar."""
+    """Al completarse la ultima firma de los responsables: parte del PDF YA
+    firmado por ellos (formalizacion.documento) e intenta estampar las firmas
+    de Revisor y Aprobador, en ese orden, cada una de tres formas posibles:
+
+      1. Si la Autoridad tiene credenciales FirmaEC completas (`puede_firmar`)
+         Y `firma_automatica` esta activo (default), se firma automaticamente
+         como siempre, sin intervencion humana.
+      2. Si `firma_automatica` esta desactivado y tiene un usuario Django
+         vinculado (`Autoridad.usuario`), se omite su firma AQUI (queda
+         pendiente en FormalizacionFirmaAutoridad) pero YA NO bloquea nada
+         mas: el cierre del Ticket Padre en Znuny y el "documento final" (sin
+         marca de agua temporal) se generan igual, sin esperarla. Esa
+         Autoridad vera el documento pendiente en su propia tabla (ver
+         mis_firmas_autoridad_view) y lo firmara ella misma cuando pueda,
+         entrando con su usuario y subiendo cedula/password/.p12 (que quedan
+         guardados en Autoridad para el dia que se reactive
+         `firma_automatica`). Cuando firme, _firmar_una_autoridad unicamente
+         reemplaza formalizacion.documento con el PDF ya con su firma
+         estampada -el ticket en Znuny NO se vuelve a tocar, porque ya estaba
+         cerrado desde el paso anterior.
+      3. Si no tiene credenciales completas ni usuario vinculado, se mantiene
+         el comportamiento legado: se notifica por correo para gestion manual
+         fuera del sistema (tampoco bloquea el cierre del ticket).
+
+    No falla el flujo de firma si el cierre en Znuny no se puede ejecutar, ni
+    si la firma automatica de autoridades falla; en ambos casos solo queda
+    constancia en logs y el proceso continua con lo que si se pudo completar."""
     if formalizacion.ticket_padre_cerrado or not formalizacion.formalizado:
         return
 
@@ -1539,19 +1650,30 @@ def _cerrar_ticket_padre_si_formalizado(formalizacion):
         # Firma de Revisor/Aprobador: cada una usa su propio idLote nuevo (ver
         # _firmar_con_autoridad); el encadenado de firmas lo hace la app
         # pasando el pdf_bytes ya firmado de un paso al siguiente, no el WS.
-        # La Autoridad puede existir solo como texto (nombre/cargo en el PDF)
-        # sin cedula ni certificado/contrasena completos: en ese caso
-        # `puede_firmar` es False y simplemente se omite la firma digital sin
-        # bloquear el cierre del ticket (igual que si no hubiera Autoridad
-        # configurada).
+        # `firma_automatica` (default True) manda sobre `puede_firmar`: si esta
+        # en False, la Autoridad SIEMPRE queda pendiente de autofirma manual
+        # (via su usuario vinculado) aunque ya tenga credenciales guardadas -
+        # pero eso YA NO detiene el resto del proceso (ver docstring, caso 2).
         revisor = Autoridad.objects.filter(tipo='revisor', activo=True).first()
-        if revisor and revisor.puede_firmar:
+        revisor_ya_firmo = bool(revisor) and FormalizacionFirmaAutoridad.objects.filter(
+            formalizacion=formalizacion, autoridad=revisor, firmado=True,
+        ).exists()
+        if revisor_ya_firmo:
+            pass  # ya firmado manualmente por el propio usuario de la Autoridad
+        elif revisor and revisor.puede_firmar and revisor.firma_automatica:
             pdf_firmado = _firmar_con_autoridad(
                 pdf_bytes, revisor, lin.pk, nombre_pdf,
                 REVISOR_FIRMA_X, REVISOR_FIRMA_Y, str(total_paginas),
             )
             if pdf_firmado:
                 pdf_bytes = pdf_firmado
+        elif revisor and _autoridad_pendiente_manual(formalizacion, revisor):
+            logger.info(
+                'Firma de Revisor "%s" queda pendiente de autofirma manual (usuario vinculado); '
+                'el cierre del ticket continua sin esperarla.',
+                revisor.nombre_completo,
+            )
+            _firma_autoridad_pendiente(formalizacion, revisor)
         elif revisor:
             logger.warning(
                 'Firma automatica omitida para Revisor "%s": faltan credenciales '
@@ -1563,13 +1685,25 @@ def _cerrar_ticket_padre_si_formalizado(formalizacion):
             logger.warning('Firma automatica omitida para Revisor: no hay Autoridad activa configurada.')
 
         aprobador = Autoridad.objects.filter(tipo='aprobador', activo=True).first()
-        if aprobador and aprobador.puede_firmar:
+        aprobador_ya_firmo = bool(aprobador) and FormalizacionFirmaAutoridad.objects.filter(
+            formalizacion=formalizacion, autoridad=aprobador, firmado=True,
+        ).exists()
+        if aprobador_ya_firmo:
+            pass  # ya firmado manualmente por el propio usuario de la Autoridad
+        elif aprobador and aprobador.puede_firmar and aprobador.firma_automatica:
             pdf_firmado = _firmar_con_autoridad(
                 pdf_bytes, aprobador, lin.pk, nombre_pdf,
                 FIRMA_COL_X[0], APROBADO_NOMBRE_Y, str(total_paginas),
             )
             if pdf_firmado:
                 pdf_bytes = pdf_firmado
+        elif aprobador and _autoridad_pendiente_manual(formalizacion, aprobador):
+            logger.info(
+                'Firma de Aprobador "%s" queda pendiente de autofirma manual (usuario vinculado); '
+                'el cierre del ticket continua sin esperarla.',
+                aprobador.nombre_completo,
+            )
+            _firma_autoridad_pendiente(formalizacion, aprobador)
         elif aprobador:
             logger.warning(
                 'Firma automatica omitida para Aprobador "%s": faltan credenciales '
@@ -1724,6 +1858,159 @@ def firmar_formalizacion_ajax(request, firma_id):
         'ok': True,
         'formalizado': formalizado,
     })
+
+
+def _posicion_firma_autoridad(autoridad, total_paginas):
+    """Coordenadas de estampado para una Autoridad (Revisor/Aprobador),
+    las mismas que usa la firma automatica en _cerrar_ticket_padre_si_formalizado."""
+    if autoridad.tipo == 'revisor':
+        return REVISOR_FIRMA_X, REVISOR_FIRMA_Y, str(total_paginas)
+    return FIRMA_COL_X[0], APROBADO_NOMBRE_Y, str(total_paginas)
+
+
+@login_required
+def formalizacion_preview_autoridad_pdf(request, firma_id):
+    """Sirve el PDF actual (sin firmar aun por esta Autoridad) de una firma
+    pendiente en FormalizacionFirmaAutoridad, para que la Autoridad pueda
+    revisarlo antes de firmarlo. Analoga a formalizacion_preview_pdf pero
+    para Autoridades en vez de responsables."""
+    autoridad = getattr(request.user, 'autoridad', None)
+    if autoridad is None:
+        return HttpResponse('No tiene un rol de Autoridad asignado.', status=403)
+
+    firma = get_object_or_404(FormalizacionFirmaAutoridad, pk=firma_id, autoridad=autoridad)
+    try:
+        pdf_bytes = _obtener_pdf_base_actual(firma.formalizacion)
+    except FirmaECError as e:
+        return HttpResponse(f'No se pudo obtener el documento a firmar: {e}', status=502)
+
+    return HttpResponse(pdf_bytes, content_type='application/pdf')
+
+
+@login_required
+def mis_firmas_autoridad_view(request):
+    """Tabla de documentos pendientes de firma para el usuario logueado,
+    cuando ese usuario esta vinculado a un registro de Autoridad (Revisor o
+    Aprobador) con `firma_automatica` desactivado. Analoga a
+    formalizacion_asignadas_view pero para Autoridades en vez de responsables."""
+    autoridad = getattr(request.user, 'autoridad', None)
+    if autoridad is None:
+        return HttpResponse('No tiene un rol de Autoridad asignado.', status=403)
+
+    firmas_pendientes = list(FormalizacionFirmaAutoridad.objects.filter(
+        autoridad=autoridad, firmado=False,
+    ).select_related('formalizacion__lineamiento').order_by('-formalizacion__fecha_creacion'))
+
+    firmas_atendidas = list(FormalizacionFirmaAutoridad.objects.filter(
+        autoridad=autoridad, firmado=True,
+    ).select_related('formalizacion__lineamiento').order_by('-fecha_firma'))
+
+    return render(request, 'formalizacion_autoridad.html', {
+        'seccion_activa': 'formalizacion',
+        'autoridad': autoridad,
+        'firmas_pendientes': firmas_pendientes,
+        'firmas_atendidas': firmas_atendidas,
+    })
+
+
+def _firmar_una_autoridad(firma, cedula, password_p12, pkcs12_b64, archivo_p12_content):
+    """Firma el documento de una Formalizacion con la Autoridad de `firma`
+    (FormalizacionFirmaAutoridad), guarda cedula/password/.p12 en el registro
+    de Autoridad para uso futuro del flujo automatico, y marca la firma como
+    hecha. El ticket padre en Znuny ya fue cerrado antes (en cuanto las
+    autoridades automaticas terminaron, sin esperar a esta), asi que
+    _cerrar_ticket_padre_si_formalizado no vuelve a hacer nada mas alla de
+    reemplazar formalizacion.documento con el PDF que ya incluye esta firma
+    -salvo el caso raro de que otra autoridad automatica siga pendiente.
+    Levanta FirmaECError si el WS de firma falla."""
+    formalizacion = firma.formalizacion
+    lin = formalizacion.lineamiento
+    autoridad = firma.autoridad
+
+    total_paginas = _asegurar_total_paginas(formalizacion)
+    pdf_base = _obtener_pdf_base_actual(formalizacion)
+    id_lote = generar_id_lote(lin.pk)
+    nombre_pdf = _nombre_pdf(lin.id_numerico, lin.ticket_principal, temporal=False)
+    llx, lly, pagina = _posicion_firma_autoridad(autoridad, total_paginas)
+
+    pdf_firmado = firmar_documento_acumulativo(
+        pdf_base, cedula, id_lote, password_p12, pkcs12_b64,
+        nombre_documento=nombre_pdf, llx=llx, lly=lly, pagina=pagina,
+    )
+    formalizacion.documento.save(nombre_pdf, ContentFile(pdf_firmado), save=True)
+
+    firma.firmado = True
+    firma.fecha_firma = timezone.now()
+    firma.save(update_fields=['firmado', 'fecha_firma'])
+
+    # Se guardan las credenciales en Autoridad para que el dia que se
+    # reactive firma_automatica, el sistema ya tenga con que firmar solo.
+    archivo_p12_content.seek(0)
+    autoridad.cedula = cedula
+    autoridad.clave_p12 = password_p12
+    autoridad.archivo_p12.save(archivo_p12_content.name, ContentFile(archivo_p12_content.read()), save=False)
+    autoridad.save(update_fields=['cedula', 'clave_p12', 'archivo_p12'])
+
+    _cerrar_ticket_padre_si_formalizado(formalizacion)
+
+
+@login_required
+@require_POST
+def firmar_autoridad_ajax(request, firma_id):
+    """Firma manual de UNA Autoridad sobre una Formalizacion especifica,
+    invocada desde la tabla de pendientes de esa Autoridad (mis_firmas_autoridad_view)."""
+    autoridad = getattr(request.user, 'autoridad', None)
+    if autoridad is None:
+        return JsonResponse({'ok': False, 'error': 'No tiene un rol de Autoridad asignado.'})
+
+    firma = get_object_or_404(FormalizacionFirmaAutoridad, pk=firma_id, autoridad=autoridad)
+    if firma.firmado:
+        return JsonResponse({'ok': False, 'error': 'Esta firma ya fue registrada'})
+
+    cedula       = (request.POST.get('cedula') or '').strip()
+    password_p12 = request.POST.get('password_p12') or ''
+    archivo_p12  = request.FILES.get('archivo_p12')
+    if not cedula or not password_p12 or not archivo_p12:
+        return JsonResponse({'ok': False, 'error': 'Debe ingresar cedula, contrasena y el archivo .p12 del certificado.'})
+
+    pkcs12_b64 = base64.b64encode(archivo_p12.read()).decode('ascii')
+    try:
+        _firmar_una_autoridad(firma, cedula, password_p12, pkcs12_b64, archivo_p12)
+    except FirmaECError as e:
+        return JsonResponse({'ok': False, 'error': f'Error al firmar con FirmaEC: {e}'})
+
+    return JsonResponse({'ok': True})
+
+
+@login_required
+@require_POST
+def firmar_todas_autoridad_ajax(request):
+    """Firma en lote TODOS los documentos pendientes de la Autoridad del
+    usuario logueado, reutilizando la misma cedula/password/.p12 subidos una
+    sola vez en el formulario."""
+    autoridad = getattr(request.user, 'autoridad', None)
+    if autoridad is None:
+        return JsonResponse({'ok': False, 'error': 'No tiene un rol de Autoridad asignado.'})
+
+    cedula       = (request.POST.get('cedula') or '').strip()
+    password_p12 = request.POST.get('password_p12') or ''
+    archivo_p12  = request.FILES.get('archivo_p12')
+    if not cedula or not password_p12 or not archivo_p12:
+        return JsonResponse({'ok': False, 'error': 'Debe ingresar cedula, contrasena y el archivo .p12 del certificado.'})
+
+    pkcs12_b64 = base64.b64encode(archivo_p12.read()).decode('ascii')
+    pendientes = list(FormalizacionFirmaAutoridad.objects.filter(autoridad=autoridad, firmado=False))
+
+    firmadas, errores = [], []
+    for firma in pendientes:
+        archivo_p12.seek(0)
+        try:
+            _firmar_una_autoridad(firma, cedula, password_p12, pkcs12_b64, archivo_p12)
+            firmadas.append(firma.pk)
+        except FirmaECError as e:
+            errores.append(f'{firma.formalizacion.lineamiento.ticket_principal}: {e}')
+
+    return JsonResponse({'ok': True, 'firmadas': firmadas, 'errores': errores})
 
 
 @login_required

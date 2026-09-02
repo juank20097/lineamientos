@@ -7,7 +7,13 @@ ROLES_CHOICES = [
     ('bdd',             'Base de Datos'),
     ('infraestructura', 'Capacidad'),
 ]
-ROLES_DICT = dict(ROLES_CHOICES)
+# 'autoridad' NO se incluye en ROLES_CHOICES: no debe poder asignarse desde el
+# formulario normal de creacion/edicion de Usuario (checkboxes de Roles
+# Institucionales). Solo se agrega automaticamente cuando un Usuario se
+# vincula como Autoridad.usuario (ver apps/core/admin.py), para reflejar que
+# este usuario es exclusivamente firmante y no un elaborador operativo.
+ROL_AUTORIDAD = 'autoridad'
+ROLES_DICT = dict(ROLES_CHOICES + [(ROL_AUTORIDAD, 'Autoridad')])
 
 
 class Usuario(AbstractUser):
@@ -52,6 +58,9 @@ class Usuario(AbstractUser):
 
     def es_infraestructura(self):
         return self.tiene_rol('infraestructura')
+
+    def es_autoridad(self):
+        return self.tiene_rol(ROL_AUTORIDAD)
 
     def __str__(self):
         return f"{self.get_full_name() or self.username} [{self.get_rol_display()}]"

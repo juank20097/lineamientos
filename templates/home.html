@@ -123,6 +123,7 @@
               <th>Ticket Padre</th>
               <th>Tipos Incluidos</th>
               <th>Fecha Formalización</th>
+              <th class="text-center">Autoridad</th>
               <th>Acciones</th>
             </tr>
           </thead>
@@ -139,6 +140,17 @@
                 {% endfor %}
               </td>
               <td style="color:#6b7280;">{{ f.fecha_cierre_ticket_padre|date:"d/m/Y H:i" }}</td>
+              <td class="text-center">
+                {% if f.autoridades_pendientes %}
+                <span title="Falta la firma de: {% for a in f.autoridades_pendientes %}{{ a.get_tipo_display }} ({{ a.nombre_completo }}){% if not forloop.last %}, {% endif %}{% endfor %}">
+                  <i class="bi bi-x-circle-fill" style="color:#dc2626;font-size:1.1rem;"></i>
+                </span>
+                {% else %}
+                <span title="Todas las firmas de Autoridad completas">
+                  <i class="bi bi-check-circle-fill" style="color:#16a34a;font-size:1.1rem;"></i>
+                </span>
+                {% endif %}
+              </td>
               <td>
                 <div class="d-flex align-items-center gap-2">
                   <a href="{% url 'repositorio_detalle' f.pk %}" class="btn btn-sm fw-semibold" style="background:#fff;border:1.5px solid var(--iess-verde);color:var(--iess-verde);border-radius:7px;padding:5px 12px;font-size:.8rem;">

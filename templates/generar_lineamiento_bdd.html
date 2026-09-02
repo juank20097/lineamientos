@@ -147,6 +147,7 @@
           <button class="tab-btn active" data-tab="tab-diagrama"><i class="bi bi-diagram-3"></i>Diagrama</button>
           <button class="tab-btn" data-tab="tab-tablas"><i class="bi bi-table"></i>Tablas</button>
           <button class="tab-btn" data-tab="tab-sql"><i class="bi bi-code-slash"></i>SQL</button>
+          <button class="tab-btn" data-tab="tab-imagenes"><i class="bi bi-images"></i>Imágenes</button>
           {% if modo == 'nuevo' and not ya_generado %}
           <button id="btnReiniciarSQL" style="margin-left:auto;background:none;border:1px solid #e2e8f0;color:#94a3b8;border-radius:20px;padding:3px 12px;font-size:.75rem;cursor:pointer;align-self:center;margin-right:8px;">
             <i class="bi bi-arrow-counterclockwise me-1"></i>Reiniciar
@@ -197,6 +198,18 @@
               <span id="sqlEditHint" style="font-size:.75rem;color:#94a3b8;align-self:center;display:none;">Edita el SQL y haz clic en <strong style="color:#86efac;">Aplicar cambios</strong> para actualizar el diagrama y las tablas.</span>
             </div>
             <textarea id="sqlRaw" readonly></textarea>
+          </div>
+
+          <!-- Tab Imagenes -->
+          <div class="tab-pane" id="tab-imagenes">
+            <div style="padding:12px;">
+              <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;">
+                <input type="file" id="inputImagenLineamiento" accept="image/*" style="display:none;">
+                <button class="zoom-btn" id="btnAgregarImagen"><i class="bi bi-plus-lg me-1"></i>Agregar imagen</button>
+                <span style="font-size:.75rem;color:#94a3b8;">Hasta {{ max_imagenes }} imágenes · cada una se incluye en una hoja del documento final</span>
+              </div>
+              <div id="listaImagenes" style="display:flex;flex-wrap:wrap;gap:12px;"></div>
+            </div>
           </div>
 
         </div>{# /tab-content #}
@@ -257,6 +270,9 @@
     const FINALIZAR_URL = '{% url "finalizar_lineamiento" detalle.pk %}';
     const GUARDAR_BORRADOR_URL = '{% url "guardar_borrador_lineamiento" detalle.pk %}';
     const DIAGRAMA_PERSONALIZADO_URL = '{{ diagrama_personalizado_url }}';
+    const IMAGENES_BASE_URL = '{% url "imagenes_lineamiento" detalle.pk %}';
+    const IMAGENES_PRECARGA = {{ imagenes_precarga|safe }};
+    const MAX_IMAGENES = {{ max_imagenes }};
     const RESPONSABLE   = '{{ request.user.get_full_name|default:request.user.username }}';
     const HOY           = new Date().toLocaleDateString('es-EC',{day:'2-digit',month:'2-digit',year:'numeric'});
     const MODO          = '{{ modo }}';
@@ -411,10 +427,19 @@
       document.getElementById('diagramaCanvas').innerHTML='<svg class="fk-lines" id="fkSvg" style="position:absolute;top:0;left:0;overflow:visible;pointer-events:none;"></svg>';
       document.getElementById('tablasContent').innerHTML='';
       document.getElementById('sqlRaw').value='';
-      docBody.innerHTML=''; docTable.style.display='none'; emptyState.style.display='flex';
-      document.getElementById('previewCount').textContent='0 lineamientos';
-      document.getElementById('btnFinalizar').classList.remove('visible');
       zoomLevel=1; aplicarZoom();
+
+      // Quitar diagrama personalizado (si existe) y todas las imagenes adicionales
+      if(DIAGRAMA_PERSONALIZADO_URL || imgDiagramaPersonalizado.style.display==='block'){
+        const fd=new FormData(); fd.append('restaurar','true');
+        fetch(DIAGRAMA_URL,{method:'POST',headers:{'X-CSRFToken':CSRF},body:fd}).catch(()=>{});
+        ocultarDiagramaPersonalizado();
+      }
+      [...imagenes].forEach(img=>{
+        fetch(`${IMAGENES_BASE_URL}${img.id}/eliminar/`,{method:'POST',headers:{'X-CSRFToken':CSRF}}).catch(()=>{});
+      });
+      imagenes=[];
+      renderImagenes();
     });
 
     // ── UPLOAD ──
@@ -549,6 +574,58 @@
           inputDiagramaImg.value = '';
         })
         .catch(()=> alert('Error de conexion al restaurar.'));
+    });
+
+    // ── IMAGENES ADICIONALES (hasta MAX_IMAGENES, una por hoja en el documento final) ──
+    let imagenes = IMAGENES_PRECARGA.slice();
+    const listaImagenes = document.getElementById('listaImagenes');
+    const btnAgregarImagen = document.getElementById('btnAgregarImagen');
+    const inputImagenLineamiento = document.getElementById('inputImagenLineamiento');
+
+    function renderImagenes(){
+      listaImagenes.innerHTML = imagenes.map(img => `
+        <div style="position:relative;width:140px;">
+          <img src="${img.url}" style="width:140px;height:140px;object-fit:cover;border-radius:8px;border:1px solid #e2e8f0;">
+          <button data-id="${img.id}" class="btnQuitarImagen" title="Quitar imagen" style="position:absolute;top:-8px;right:-8px;width:24px;height:24px;border-radius:50%;border:none;background:#dc2626;color:#fff;cursor:pointer;line-height:1;">×</button>
+        </div>
+      `).join('');
+      btnAgregarImagen.disabled = imagenes.length >= MAX_IMAGENES;
+      btnAgregarImagen.style.opacity = imagenes.length >= MAX_IMAGENES ? .5 : 1;
+      listaImagenes.querySelectorAll('.btnQuitarImagen').forEach(btn=>{
+        btn.addEventListener('click', ()=>{
+          const id = btn.dataset.id;
+          fetch(`${IMAGENES_BASE_URL}${id}/eliminar/`, {method:'POST', headers:{'X-CSRFToken':CSRF}})
+            .then(r=>r.json())
+            .then(data=>{
+              if(!data.ok){ alert('Error al quitar la imagen: '+(data.error||'desconocido')); return; }
+              imagenes = imagenes.filter(img=>String(img.id)!==String(id));
+              renderImagenes();
+            })
+            .catch(()=> alert('Error de conexion al quitar la imagen.'));
+        });
+      });
+    }
+    renderImagenes();
+
+    btnAgregarImagen.addEventListener('click', ()=>{
+      if(imagenes.length >= MAX_IMAGENES){ alert(`Máximo ${MAX_IMAGENES} imágenes por lineamiento.`); return; }
+      inputImagenLineamiento.click();
+    });
+
+    inputImagenLineamiento.addEventListener('change', ()=>{
+      const file = inputImagenLineamiento.files[0];
+      inputImagenLineamiento.value = '';
+      if(!file) return;
+      const fd = new FormData();
+      fd.append('imagen', file);
+      fetch(IMAGENES_BASE_URL, {method:'POST', headers:{'X-CSRFToken':CSRF}, body: fd})
+        .then(r=>r.json())
+        .then(data=>{
+          if(!data.ok){ alert('Error al guardar la imagen: '+(data.error||'desconocido')); return; }
+          imagenes.push({id:data.id, url:data.url});
+          renderImagenes();
+        })
+        .catch(()=> alert('Error de conexion al guardar la imagen.'));
     });
 
     // ── DIAGRAMA ──
