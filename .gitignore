@@ -11,3 +11,4 @@ media/
 staticfiles/
 *.pdf
 .claude
+graphify-out/
