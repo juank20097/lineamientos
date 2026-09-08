@@ -1212,8 +1212,8 @@ def mis_tickets_view(request):
     if user.is_staff:
         return redirect('tickets_asignadas')
     detalles_qs         = LineamientoDetalle.objects.filter(usuario_asignado=user).select_related('lineamiento').prefetch_related('generados')
-    detalles_pendientes = [d for d in detalles_qs if not d.finalizado]
-    detalles_atendidos  = [d for d in detalles_qs if d.finalizado]
+    detalles_pendientes = [d for d in detalles_qs if not d.finalizado or d.tiene_borrador_pendiente]
+    detalles_atendidos  = [d for d in detalles_qs if d.finalizado and not d.tiene_borrador_pendiente]
     return render(request, 'mis_tickets.html', {
         'detalles_pendientes': detalles_pendientes,
         'detalles_atendidos':  detalles_atendidos,
@@ -1299,7 +1299,7 @@ def _solicitudes_staff(user):
     for sol in solicitudes:
         detalles    = list(sol.detalles.all())
         total       = len(detalles)
-        finalizados = sum(1 for d in detalles if d.finalizado)
+        finalizados = sum(1 for d in detalles if d.finalizado and not d.tiene_borrador_pendiente)
         progreso[sol.pk] = round(finalizados / total * 100) if total else 0
     asignadas = [s for s in solicitudes if progreso.get(s.pk, 0) < 100]
     atendidas = [s for s in solicitudes if progreso.get(s.pk, 0) == 100]
@@ -2167,12 +2167,23 @@ def _autoformalizar_si_completo(lin, usuario):
     """Si todos los detalles del ticket padre llegaron al 100% (finalizado),
     crea automaticamente la Formalizacion con las versiones actuales (ultima
     version de cada detalle), respetando la validacion de duplicados exacta.
-    No hace nada si ya existe una formalizacion para esa combinacion."""
+    No hace nada si ya existe una formalizacion para esa combinacion.
+
+    Al crear una nueva version de un detalle ya formalizado, el version_map
+    resultante difiere del de la Formalizacion anterior, por lo que esto
+    genera una Formalizacion nueva con FormalizacionFirma pendientes para
+    TODOS los detalles del ticket (vuelve a aparecer en 'Mis solicitudes'
+    para todos los responsables), sin tocar la Formalizacion anterior que
+    permanece firmada en 'Solicitudes atendidas'.
+
+    Retorna el error de _crear_formalizacion_si_no_existe (o None) para que
+    el llamador pueda registrarlo en vez de fallar en silencio."""
     detalles = list(lin.detalles.all())
     if not detalles or not all(d.finalizado for d in detalles):
-        return
+        return None
     version_map = {d.pk: d.ultima_version.pk for d in detalles}
-    _crear_formalizacion_si_no_existe(lin, version_map, usuario)
+    _formalizacion, _creada, error = _crear_formalizacion_si_no_existe(lin, version_map, usuario)
+    return error
 
 
 @login_required
@@ -2273,7 +2284,12 @@ def finalizar_ajax(request, detalle_id):
         finally:
             if tmp_dir and os.path.exists(tmp_dir):
                 shutil.rmtree(tmp_dir, ignore_errors=True)
-        _autoformalizar_si_completo(detalle.lineamiento, request.user)
+        error_formalizacion = _autoformalizar_si_completo(detalle.lineamiento, request.user)
+        if error_formalizacion:
+            logger.error(
+                'Fallo la creacion automatica de Formalizacion para ticket %s: %s',
+                detalle.lineamiento.ticket_principal, error_formalizacion,
+            )
     elif modo == 'actualizar':
         ticket_version  = generado.ticket or detalle.ticket_interno
         version_map_pdf = {detalle.pk: generado.pk}
