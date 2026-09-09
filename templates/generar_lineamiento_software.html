@@ -415,7 +415,7 @@
         <td contenteditable="true">${g?.necesidad??''}</td>
         <td contenteditable="true">${g?.lineamiento??''}</td>
         <td contenteditable="true">${g?.mecanismo??''}</td>
-        <td class="fecha">${HOY}</td>
+        <td class="fecha">${g?.fecha??HOY}</td>
         <td contenteditable="true">${g?.observacion??''}</td>
         <td class="td-acc"><button class="btn-del"><i class="bi bi-trash3"></i></button></td>`;
       tr.querySelector('.btn-del').addEventListener('click',()=>{

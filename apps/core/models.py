@@ -171,6 +171,8 @@ class LineamientoGeneradoFila(models.Model):
     lineamiento = models.TextField(blank=True)
     mecanismo   = models.TextField(blank=True)
     observacion = models.TextField(blank=True)
+    fecha_creacion     = models.DateTimeField(auto_now_add=True)
+    fecha_modificacion = models.DateTimeField(auto_now=True)
 
     class Meta:
         db_table = 'Filas_Lineamientos'

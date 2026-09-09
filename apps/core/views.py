@@ -86,6 +86,17 @@ def _limpiar_ticket(valor):
     return re.sub(r'^ticket#', '', valor.strip(), flags=re.IGNORECASE)
 
 
+def _fila_a_dict(f):
+    """Serializa una LineamientoGeneradoFila incluyendo su fecha de creacion
+    original (dd/mm/aaaa), para que el frontend la preserve en vez de
+    reemplazarla por la fecha del dia al recargar/editar una version."""
+    return {
+        'necesidad': f.necesidad, 'lineamiento': f.lineamiento,
+        'mecanismo': f.mecanismo, 'observacion': f.observacion,
+        'fecha': timezone.localtime(f.fecha_creacion).strftime('%d/%m/%Y'),
+    }
+
+
 TIPO_ABREV  = {'software': 'SW', 'bdd': 'BDD', 'infraestructura': 'INF'}
 ORDEN_TIPOS = ['software', 'bdd', 'infraestructura']  # SW, BDD, INF
 
@@ -848,11 +859,7 @@ def generar_lineamiento_bdd_view(request, detalle_id):
     filas_precarga = []
     bdd_precarga   = {}
     if borrador:
-        filas_precarga = [
-            {'necesidad': f.necesidad, 'lineamiento': f.lineamiento,
-             'mecanismo': f.mecanismo,  'observacion': f.observacion}
-            for f in borrador.filas.all()
-        ]
+        filas_precarga = [_fila_a_dict(f) for f in borrador.filas.all()]
         if borrador.bdd_sql:
             bdd_precarga = {
                 'sql':       borrador.bdd_sql,
@@ -861,11 +868,7 @@ def generar_lineamiento_bdd_view(request, detalle_id):
                 'sequences': borrador.bdd_sequences or [],
             }
     elif modo in ('actualizar', 'nueva_version') and ultima:
-        filas_precarga = [
-            {'necesidad': f.necesidad, 'lineamiento': f.lineamiento,
-             'mecanismo': f.mecanismo,  'observacion': f.observacion}
-            for f in ultima.filas.all()
-        ]
+        filas_precarga = [_fila_a_dict(f) for f in ultima.filas.all()]
         if ultima.bdd_sql:
             bdd_precarga = {
                 'sql':       ultima.bdd_sql,
@@ -899,17 +902,9 @@ def generar_lineamiento_capacidad_view(request, detalle_id):
     modo      = request.GET.get('modo', 'nuevo')
     ticket_nv = _limpiar_ticket(request.GET.get('ticket', ''))
     if borrador:
-        filas_precarga = [
-            {'necesidad': f.necesidad, 'lineamiento': f.lineamiento,
-             'mecanismo': f.mecanismo,  'observacion': f.observacion}
-            for f in borrador.filas.all()
-        ]
+        filas_precarga = [_fila_a_dict(f) for f in borrador.filas.all()]
     elif modo in ('actualizar', 'nueva_version') and ultima:
-        filas_precarga = [
-            {'necesidad': f.necesidad, 'lineamiento': f.lineamiento,
-             'mecanismo': f.mecanismo,  'observacion': f.observacion}
-            for f in ultima.filas.all()
-        ]
+        filas_precarga = [_fila_a_dict(f) for f in ultima.filas.all()]
     else:
         filas_precarga = []
     return render(request, 'generar_lineamiento_capacidad.html', {
@@ -2070,17 +2065,9 @@ def generar_lineamiento_view(request, detalle_id):
     modo      = request.GET.get('modo', 'nuevo')
     ticket_nv = _limpiar_ticket(request.GET.get('ticket', ''))
     if borrador:
-        filas_precarga = [
-            {'necesidad': f.necesidad, 'lineamiento': f.lineamiento,
-             'mecanismo': f.mecanismo,  'observacion': f.observacion}
-            for f in borrador.filas.all()
-        ]
+        filas_precarga = [_fila_a_dict(f) for f in borrador.filas.all()]
     elif modo in ('actualizar', 'nueva_version') and ultima:
-        filas_precarga = [
-            {'necesidad': f.necesidad, 'lineamiento': f.lineamiento,
-             'mecanismo': f.mecanismo,  'observacion': f.observacion}
-            for f in ultima.filas.all()
-        ]
+        filas_precarga = [_fila_a_dict(f) for f in ultima.filas.all()]
     else:
         filas_precarga = []
     mensajes_previos = (borrador.chat_estado or {}).get('mensajes', []) if borrador else []
@@ -2123,6 +2110,36 @@ def chat_software_ajax(request, detalle_id):
         'opciones': paso_def.get('opciones', []), 'guidelines': _guidelines_para_preview(info), 'completado': completado})
 
 
+def _guardar_filas_preservando_fecha(generado, filas):
+    """Sincroniza las filas de un LineamientoGenerado con la lista recibida del
+    frontend, comparando por 'orden'. Las filas cuyo contenido no cambio
+    conservan su fecha_creacion/fecha_modificacion original; solo las filas
+    nuevas o con contenido distinto actualizan fecha_modificacion (auto_now)."""
+    existentes = {f.orden: f for f in generado.filas.all()}
+    if not filas and existentes:
+        # Payload vacio sobre un registro que ya tenia filas: lo mas probable
+        # es un guardado prematuro/accidental (ej. el JS disparo antes de
+        # pintar la tabla). Ignorarlo evita borrar contenido real existente.
+        return
+    ordenes_nuevos = set()
+    for i, fila in enumerate(filas, start=1):
+        ordenes_nuevos.add(i)
+        datos = {
+            'necesidad':   fila.get('necesidad', ''),
+            'lineamiento': fila.get('lineamiento', ''),
+            'mecanismo':   fila.get('mecanismo', ''),
+            'observacion': fila.get('observacion', ''),
+        }
+        actual = existentes.get(i)
+        if actual is None:
+            LineamientoGeneradoFila.objects.create(generado=generado, orden=i, **datos)
+        elif any(getattr(actual, campo) != valor for campo, valor in datos.items()):
+            for campo, valor in datos.items():
+                setattr(actual, campo, valor)
+            actual.save()
+    generado.filas.exclude(orden__in=ordenes_nuevos).delete()
+
+
 # ── AJAX: GUARDAR BORRADOR ─────────────────────────────────────────────────────
 
 @login_required
@@ -2151,13 +2168,7 @@ def guardar_borrador_ajax(request, detalle_id):
 
     generado.save()
 
-    generado.filas.all().delete()
-    for i, fila in enumerate(filas, start=1):
-        LineamientoGeneradoFila.objects.create(
-            generado=generado, orden=i,
-            necesidad=fila.get('necesidad', ''), lineamiento=fila.get('lineamiento', ''),
-            mecanismo=fila.get('mecanismo', ''),  observacion=fila.get('observacion', ''),
-        )
+    _guardar_filas_preservando_fecha(generado, filas)
     return JsonResponse({'ok': True})
 
 
@@ -2223,7 +2234,6 @@ def finalizar_ajax(request, detalle_id):
                 'bloqueado': True,
                 'error': 'Esta versión ya está en proceso de formalización. Para realizar cambios, debe crear una nueva versión.',
             })
-        generado.filas.all().delete()
         if bdd_sql:       generado.bdd_sql       = bdd_sql
         if bdd_schema:    generado.bdd_schema    = bdd_schema
         if bdd_tables:    generado.bdd_tables    = bdd_tables
@@ -2244,18 +2254,20 @@ def finalizar_ajax(request, detalle_id):
                       'bdd_tables': bdd_tables, 'bdd_sequences': bdd_sequences},
         )
         if not creado:
-            generado.filas.all().delete()
             if bdd_sql:       generado.bdd_sql       = bdd_sql
             if bdd_schema:    generado.bdd_schema    = bdd_schema
             if bdd_tables:    generado.bdd_tables    = bdd_tables
             if bdd_sequences: generado.bdd_sequences = bdd_sequences
             generado.save(update_fields=['bdd_sql','bdd_schema','bdd_tables','bdd_sequences'])
-    for i, fila in enumerate(filas, start=1):
-        LineamientoGeneradoFila.objects.create(
-            generado=generado, orden=i,
-            necesidad=fila.get('necesidad', ''), lineamiento=fila.get('lineamiento', ''),
-            mecanismo=fila.get('mecanismo', ''),  observacion=fila.get('observacion', ''),
-        )
+    if modo == 'nueva_version':
+        for i, fila in enumerate(filas, start=1):
+            LineamientoGeneradoFila.objects.create(
+                generado=generado, orden=i,
+                necesidad=fila.get('necesidad', ''), lineamiento=fila.get('lineamiento', ''),
+                mecanismo=fila.get('mecanismo', ''),  observacion=fila.get('observacion', ''),
+            )
+    else:
+        _guardar_filas_preservando_fecha(generado, filas)
     if modo in ('nuevo', 'nueva_version'):
         ticket_cierre = detalle.ticket_interno if modo == 'nuevo' else ticket
         version_map_pdf = {detalle.pk: generado.pk}
@@ -2328,8 +2340,7 @@ def cargar_version_ajax(request, detalle_id):
     generado = detalle.generados.filter(es_borrador=False).order_by('-version').first()
     if not generado:
         return JsonResponse({'ok': False, 'error': 'Sin version guardada'})
-    filas = [{'necesidad': f.necesidad, 'lineamiento': f.lineamiento,
-               'mecanismo': f.mecanismo, 'observacion': f.observacion} for f in generado.filas.all()]
+    filas = [_fila_a_dict(f) for f in generado.filas.all()]
     return JsonResponse({'ok': True, 'version': generado.version_display(), 'filas': filas})
 
 
