@@ -118,7 +118,7 @@
 
   <div class="info-bar">
     <a href="{% url 'home' %}" style="color:#64748b;text-decoration:none;font-size:.8rem;"><i class="bi bi-arrow-left me-1"></i>Inicio</a>
-    <span class="chip"><i class="bi bi-ticket-detailed me-1"></i>#{{ detalle.lineamiento.ticket_principal }}</span>
+    <span class="chip" {% if detalle.lineamiento.asunto %}title="{{ detalle.lineamiento.asunto }}"{% endif %}><i class="bi bi-ticket-detailed me-1"></i>#{{ detalle.lineamiento.ticket_principal }}</span>
     <span class="chip"><i class="bi bi-ticket me-1"></i>#{{ detalle.ticket_interno }}</span>
     <span class="chip"><i class="bi bi-database me-1"></i>Base de Datos</span>
     {% if modo != 'nuevo' %}<span class="chip" style="background:#fef9ec;color:#92400e;">{% if modo == 'actualizar' %}Actualizando{% else %}Nueva versión{% endif %}{% if ticket_nv %} · #{{ ticket_nv }}{% endif %}</span>{% endif %}
@@ -253,8 +253,34 @@
     </div>
   </div>
 
+  <!-- Modal: vista previa del documento antes de enviar a Znuny -->
+  <div class="modal fade" id="modalPreviewPdf" tabindex="-1" data-bs-backdrop="static">
+    <div class="modal-dialog modal-lg modal-dialog-scrollable">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title"><i class="bi bi-file-earmark-pdf me-2"></i>Vista previa del documento</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body" style="background:#525659;text-align:center;">
+          <p id="previewPdfMsg" style="color:#fff;"><span class="spinner-border spinner-border-sm me-1"></span>Generando vista previa...</p>
+          <div id="previewPdfPaginas"></div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Seguir editando</button>
+          <button type="button" class="btn" id="btnConfirmarEnvioZnuny"
+            style="background:var(--bdd);color:#fff;">
+            <i class="bi bi-send-check me-1"></i>Guardar y enviar a Znuny
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.min.js"></script>
   <script>
+    pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.worker.min.js';
+
     // Forzar pegado como texto plano en cualquier celda editable (evita pegar tablas/celdas de Excel)
     document.addEventListener('paste', function(e){
       const target = e.target.closest && e.target.closest('[contenteditable="true"]');
@@ -268,6 +294,7 @@
     const CARGAR_URL    = '{% url "cargar_sql" detalle.pk %}';
     const DIAGRAMA_URL  = '{% url "diagrama_personalizado" detalle.pk %}';
     const FINALIZAR_URL = '{% url "finalizar_lineamiento" detalle.pk %}';
+    const PREVIEW_PDF_URL = '{% url "preview_pdf_lineamiento" detalle.pk %}';
     const GUARDAR_BORRADOR_URL = '{% url "guardar_borrador_lineamiento" detalle.pk %}';
     const DIAGRAMA_PERSONALIZADO_URL = '{{ diagrama_personalizado_url }}';
     const IMAGENES_BASE_URL = '{% url "imagenes_lineamiento" detalle.pk %}';
@@ -428,6 +455,7 @@
       document.getElementById('tablasContent').innerHTML='';
       document.getElementById('sqlRaw').value='';
       zoomLevel=1; aplicarZoom();
+      quitarFilasGeneradasDesdeSQL();
 
       // Quitar diagrama personalizado (si existe) y todas las imagenes adicionales
       if(DIAGRAMA_PERSONALIZADO_URL || imgDiagramaPersonalizado.style.display==='block'){
@@ -496,6 +524,63 @@
       renderTablasTab();
       actualizarSQL();
       dibujarDiagrama();
+      generarFilasDesdeSQL();
+    }
+
+    // Genera automaticamente una fila en la tabla de lineamientos por cada
+    // objeto detectado en el SQL cargado (tablas, PK, FK, indices, checks,
+    // uniques y secuencias), dejando "necesidad" vacia para que el usuario
+    // describa el objetivo de negocio de cada una.
+    function generarFilasDesdeSQL(){
+      emptyState.style.display='none'; docTable.style.display='table';
+      const yaGeneradas = new Set(
+        [...docBody.querySelectorAll('tr')].map(tr=>tr.children[4].textContent.trim())
+      );
+      const nuevasFilas = [];
+      const agregar = (lineamiento, observacion)=>{
+        if(yaGeneradas.has(lineamiento)) return;
+        yaGeneradas.add(lineamiento);
+        nuevasFilas.push({necesidad:'', lineamiento, mecanismo:'DDL', observacion});
+      };
+      Object.entries(TABLES).forEach(([tname, t])=>{
+        agregar(`Crear la tabla ${tname}`, t.table_comment || '');
+        if(t.pks && t.pks.length){
+          agregar(`Crear la llave primaria ${t.pk_name || (tname+'_PK')} en ${tname}`,
+            `Columnas: ${t.pks.join(', ')}`);
+        }
+        (t.fks||[]).forEach(fk=>{
+          agregar(`Crear la llave foránea ${fk.name} en ${tname}`,
+            `${fk.columns.join(', ')} referencia a ${fk.ref_table}(${fk.ref_columns.join(', ')})`);
+        });
+        (t.uniques||[]).forEach(uq=>{
+          agregar(`Crear la restricción UNIQUE ${uq.name} en ${tname}`,
+            `Columnas: ${uq.columns.join(', ')}`);
+        });
+        (t.checks||[]).forEach(chk=>{
+          agregar(`Crear la restricción CHECK ${chk.name} en ${tname}`, chk.expr);
+        });
+        (t.indexes||[]).forEach(idx=>{
+          agregar(`Crear el ${idx.unique?'índice único':'índice'} ${idx.name} en ${tname}`,
+            `Columnas: ${idx.columns.map(c=>c.name+' '+c.order).join(', ')}`);
+        });
+      });
+      SEQUENCES.forEach(seq=>{
+        agregar(`Crear la secuencia ${seq}`, '');
+      });
+      nuevasFilas.forEach(f=>docBody.appendChild(crearFila(f)));
+      if(nuevasFilas.length) renumerar();
+      document.getElementById('btnFinalizar').classList.add('visible');
+    }
+
+    // Vacia la tabla de lineamientos y deja solo la fila base inicial (la
+    // misma con la que arranca la pantalla cuando no hay nada precargado),
+    // ya que al reiniciar el analisis del SQL el usuario esta empezando de
+    // cero pero la fila transversal siempre debe estar presente.
+    function quitarFilasGeneradasDesdeSQL(){
+      docBody.innerHTML='';
+      docBody.appendChild(crearFila(FILA_INICIAL_TRANSVERSAL));
+      emptyState.style.display='none'; docTable.style.display='table';
+      renumerar();
     }
 
     // ── ZOOM ──
@@ -939,17 +1024,72 @@
         return {necesidad:c[3].innerText,lineamiento:c[4].innerText,mecanismo:c[5].innerText,observacion:c[7].innerText};
       });
       if(!filas.length){alert('No hay lineamientos para guardar.');return;}
+
+      const payload = {
+        filas, modo:MODO, ticket:TICKET_NV,
+        bdd_sql:       document.getElementById('sqlRaw').value || '',
+        bdd_schema:    SCHEMA,
+        bdd_tables:    TABLES,
+        bdd_sequences: SEQUENCES,
+      };
+      abrirPreviewPdf(payload);
+    });
+
+    // ── PREVIEW PDF + CONFIRMACION ANTES DE ENVIAR A ZNUNY ──
+    function abrirPreviewPdf(payload){
+      const btn = document.getElementById('btnFinalizar');
+      btn.disabled = true;
+      mostrarLoading('Generando vista previa del documento...');
+      fetch(PREVIEW_PDF_URL,{method:'POST',headers:{'Content-Type':'application/json','X-CSRFToken':CSRF},
+        body:JSON.stringify(payload)})
+      .then(r=>{
+        if(!r.ok) throw new Error('preview');
+        return r.blob();
+      })
+      .then(blob=>{
+        ocultarLoading(); btn.disabled=false;
+        const modalEl = document.getElementById('modalPreviewPdf');
+        const modal = bootstrap.Modal.getOrCreateInstance(modalEl);
+        const cont  = document.getElementById('previewPdfPaginas');
+        const msg   = document.getElementById('previewPdfMsg');
+        cont.innerHTML = ''; msg.style.display='block';
+        msg.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Renderizando documento...';
+        modal.show();
+        const url = URL.createObjectURL(blob);
+        pdfjsLib.getDocument(url).promise.then(pdf=>{
+          msg.style.display='none';
+          const renders = [];
+          for(let i=1;i<=pdf.numPages;i++){
+            renders.push(pdf.getPage(i).then(page=>{
+              const viewport = page.getViewport({scale:1.3});
+              const canvas = document.createElement('canvas');
+              canvas.style.cssText='max-width:100%;margin:0 auto 12px;display:block;box-shadow:0 2px 8px rgba(0,0,0,.3);';
+              canvas.width = viewport.width; canvas.height = viewport.height;
+              cont.appendChild(canvas);
+              return page.render({canvasContext:canvas.getContext('2d'), viewport}).promise;
+            }));
+          }
+          Promise.all(renders).catch(()=>{});
+        }).catch(()=>{
+          msg.style.display='block';
+          msg.innerHTML = '<span class="text-warning">No se pudo renderizar la vista previa, pero puedes continuar.</span>';
+        });
+
+        document.getElementById('btnConfirmarEnvioZnuny').onclick = ()=>{
+          if(!confirm('¿Estás seguro de enviar este lineamiento a Znuny?')) return;
+          modal.hide();
+          enviarFinalizar(payload);
+        };
+      })
+      .catch(()=>{ocultarLoading(); btn.disabled=false; alert('No se pudo generar la vista previa. Intenta de nuevo.');});
+    }
+
+    function enviarFinalizar(payload){
       const btn=document.getElementById('btnFinalizar');
       btn.disabled=true; btn.innerHTML='<span class="spinner-border spinner-border-sm me-1"></span> Guardando...';
       mostrarLoading('Guardando lineamiento y cerrando ticket en Znuny...');
       fetch(FINALIZAR_URL,{method:'POST',headers:{'Content-Type':'application/json','X-CSRFToken':CSRF},
-        body:JSON.stringify({
-          filas, modo:MODO, ticket:TICKET_NV,
-          bdd_sql:       document.getElementById('sqlRaw').value || '',
-          bdd_schema:    SCHEMA,
-          bdd_tables:    TABLES,
-          bdd_sequences: SEQUENCES,
-        })})
+        body:JSON.stringify(payload)})
       .then(r=>r.json())
       .then(data=>{
         if(data.ok) window.location.href='{% url "mis_tickets" %}';
@@ -957,7 +1097,7 @@
         else{ocultarLoading();btn.disabled=false;alert('Error al guardar: '+(data.error||'desconocido'));}
       })
       .catch(()=>{ocultarLoading();btn.disabled=false;alert('Error de conexion.');});
-    });
+    }
   </script>
 </body>
 </html>

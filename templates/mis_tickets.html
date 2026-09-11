@@ -95,7 +95,7 @@
           <tbody>
             {% for d in detalles_pendientes %}
             <tr>
-              <td class="ps-4 py-3"><a href="{% ticket_url d.lineamiento.ticket_principal %}" target="_blank" class="fw-semibold ticket-link" style="font-family:monospace;">#{{ d.lineamiento.ticket_principal }}<i class="bi bi-box-arrow-up-right"></i></a></td>
+              <td class="ps-4 py-3"><a href="{% ticket_url d.lineamiento.ticket_principal %}" target="_blank" class="fw-semibold ticket-link" style="font-family:monospace;" {% if d.lineamiento.asunto %}title="{{ d.lineamiento.asunto }}"{% endif %}>#{{ d.lineamiento.ticket_principal }}<i class="bi bi-box-arrow-up-right"></i></a></td>
               <td><span class="badge" style="font-size:.72rem;{% if d.tipo == 'software' %}background:#eff6ff;color:#2563eb;{% elif d.tipo == 'bdd' %}background:#f5f3ff;color:#7c3aed;{% else %}background:#fffbeb;color:#d97706;{% endif %}">{{ d.get_tipo_display }}</span></td>
               <td><a href="{% ticket_url d.ticket_interno %}" target="_blank" class="ticket-link" style="font-family:monospace;font-size:.82rem;">#{{ d.ticket_interno }}<i class="bi bi-box-arrow-up-right"></i></a></td>
               <td style="color:#6b7280;">{{ d.lineamiento.fecha_creacion|date:"d/m/Y H:i" }}</td>
@@ -130,7 +130,7 @@
           <tbody>
             {% for d in detalles_atendidos %}
             <tr style="opacity:.88;">
-              <td class="ps-4 py-3"><a href="{% ticket_url d.lineamiento.ticket_principal %}" target="_blank" class="fw-semibold ticket-link" style="font-family:monospace;">#{{ d.lineamiento.ticket_principal }}<i class="bi bi-box-arrow-up-right"></i></a></td>
+              <td class="ps-4 py-3"><a href="{% ticket_url d.lineamiento.ticket_principal %}" target="_blank" class="fw-semibold ticket-link" style="font-family:monospace;" {% if d.lineamiento.asunto %}title="{{ d.lineamiento.asunto }}"{% endif %}>#{{ d.lineamiento.ticket_principal }}<i class="bi bi-box-arrow-up-right"></i></a></td>
               <td><span class="badge" style="font-size:.72rem;{% if d.tipo == 'software' %}background:#eff6ff;color:#2563eb;{% elif d.tipo == 'bdd' %}background:#f5f3ff;color:#7c3aed;{% else %}background:#fffbeb;color:#d97706;{% endif %}">{{ d.get_tipo_display }}</span></td>
               <td><a href="{% ticket_url d.ticket_interno %}" target="_blank" class="ticket-link" style="font-family:monospace;font-size:.82rem;">#{{ d.ticket_interno }}<i class="bi bi-box-arrow-up-right"></i></a></td>
               <td style="color:#6b7280;">{{ d.lineamiento.fecha_creacion|date:"d/m/Y H:i" }}</td>

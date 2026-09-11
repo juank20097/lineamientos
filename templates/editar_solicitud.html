@@ -88,7 +88,7 @@
       <div class="card-lin-header">
         <i class="bi bi-pencil-square" style="font-size:1.2rem"></i>
         <h5>Editar Solicitud</h5>
-        <span class="ms-auto ticket-badge"><i class="bi bi-ticket-detailed me-1"></i>#{{ lin.ticket_principal }}</span>
+        <span class="ms-auto ticket-badge" {% if lin.asunto %}title="{{ lin.asunto }}"{% endif %}><i class="bi bi-ticket-detailed me-1"></i>#{{ lin.ticket_principal }}</span>
       </div>
 
       <!-- Tipos existentes (readonly) -->

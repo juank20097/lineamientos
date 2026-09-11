@@ -41,6 +41,11 @@ def _ruta_imagen_lineamiento(instance, filename):
 
 class Lineamiento(models.Model):
     ticket_principal = models.CharField(max_length=50, verbose_name='Ticket Principal')
+    asunto = models.CharField(
+        max_length=255, blank=True, default='', verbose_name='Asunto del ticket',
+        help_text='Asunto tal como aparece en Znuny, obtenido al crear el Lineamiento. '
+                  'Se usa como tooltip donde se muestra el ticket principal.',
+    )
     id_numerico = models.CharField(
         max_length=20, default='', verbose_name='ID Numérico del Documento',
         help_text='Identificador manual usado en el codigo del documento (PAS-MLT-{ID}-{Ticket}). '

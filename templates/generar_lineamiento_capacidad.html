@@ -84,7 +84,7 @@
 
   <div class="info-bar">
     <a href="{% url 'home' %}" style="color:#64748b;text-decoration:none;font-size:.8rem;"><i class="bi bi-arrow-left me-1"></i>Inicio</a>
-    <span class="chip"><i class="bi bi-ticket-detailed me-1"></i>#{{ detalle.lineamiento.ticket_principal }}</span>
+    <span class="chip" {% if detalle.lineamiento.asunto %}title="{{ detalle.lineamiento.asunto }}"{% endif %}><i class="bi bi-ticket-detailed me-1"></i>#{{ detalle.lineamiento.ticket_principal }}</span>
     <span class="chip"><i class="bi bi-ticket me-1"></i>#{{ detalle.ticket_interno }}</span>
     <span class="chip"><i class="bi bi-hdd-network me-1"></i>Capacidad</span>
     {% if modo != 'nuevo' %}<span class="chip" style="background:#fef9ec;color:#92400e;">{% if modo == 'actualizar' %}Actualizando{% else %}Nueva versión{% endif %}{% if ticket_nv %} · #{{ ticket_nv }}{% endif %}</span>{% endif %}
@@ -152,8 +152,34 @@
     </div>
   </div>
 
+  <!-- Modal: vista previa del documento antes de enviar a Znuny -->
+  <div class="modal fade" id="modalPreviewPdf" tabindex="-1" data-bs-backdrop="static">
+    <div class="modal-dialog modal-lg modal-dialog-scrollable">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title"><i class="bi bi-file-earmark-pdf me-2"></i>Vista previa del documento</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body" style="background:#525659;text-align:center;">
+          <p id="previewPdfMsg" style="color:#fff;"><span class="spinner-border spinner-border-sm me-1"></span>Generando vista previa...</p>
+          <div id="previewPdfPaginas"></div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Seguir editando</button>
+          <button type="button" class="btn" id="btnConfirmarEnvioZnuny"
+            style="background:var(--inf);color:#fff;">
+            <i class="bi bi-send-check me-1"></i>Guardar y enviar a Znuny
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.min.js"></script>
   <script>
+    pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.worker.min.js';
+
     // Forzar pegado como texto plano en cualquier celda editable (evita pegar tablas/celdas de Excel)
     document.addEventListener('paste', function(e){
       const target = e.target.closest && e.target.closest('[contenteditable="true"]');
@@ -166,6 +192,7 @@
     const CSRF          = '{{ csrf_token }}';
     const DIAGRAMA_URL  = '{% url "diagrama_personalizado" detalle.pk %}';
     const FINALIZAR_URL = '{% url "finalizar_lineamiento" detalle.pk %}';
+    const PREVIEW_PDF_URL = '{% url "preview_pdf_lineamiento" detalle.pk %}';
     const GUARDAR_BORRADOR_URL = '{% url "guardar_borrador_lineamiento" detalle.pk %}';
     const DIAGRAMA_PERSONALIZADO_URL = '{{ diagrama_personalizado_url }}';
     const RESPONSABLE   = '{{ request.user.get_full_name|default:request.user.username }}';
@@ -333,11 +360,64 @@
         const c=tr.querySelectorAll('td');
         return {necesidad:c[3].innerText,lineamiento:c[4].innerText,mecanismo:c[5].innerText,observacion:c[7].innerText};
       });
+      abrirPreviewPdf({ filas, modo:MODO, ticket:TICKET_NV });
+    });
+
+    // ── PREVIEW PDF + CONFIRMACION ANTES DE ENVIAR A ZNUNY ──
+    function abrirPreviewPdf(payload){
+      const btn = document.getElementById('btnFinalizar');
+      btn.disabled = true;
+      mostrarLoading('Generando vista previa del documento...');
+      fetch(PREVIEW_PDF_URL,{method:'POST',headers:{'Content-Type':'application/json','X-CSRFToken':CSRF},
+        body:JSON.stringify(payload)})
+      .then(r=>{
+        if(!r.ok) throw new Error('preview');
+        return r.blob();
+      })
+      .then(blob=>{
+        ocultarLoading(); btn.disabled=false;
+        const modalEl = document.getElementById('modalPreviewPdf');
+        const modal = bootstrap.Modal.getOrCreateInstance(modalEl);
+        const cont  = document.getElementById('previewPdfPaginas');
+        const msg   = document.getElementById('previewPdfMsg');
+        cont.innerHTML = ''; msg.style.display='block';
+        msg.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Renderizando documento...';
+        modal.show();
+        const url = URL.createObjectURL(blob);
+        pdfjsLib.getDocument(url).promise.then(pdf=>{
+          msg.style.display='none';
+          const renders = [];
+          for(let i=1;i<=pdf.numPages;i++){
+            renders.push(pdf.getPage(i).then(page=>{
+              const viewport = page.getViewport({scale:1.3});
+              const canvas = document.createElement('canvas');
+              canvas.style.cssText='max-width:100%;margin:0 auto 12px;display:block;box-shadow:0 2px 8px rgba(0,0,0,.3);';
+              canvas.width = viewport.width; canvas.height = viewport.height;
+              cont.appendChild(canvas);
+              return page.render({canvasContext:canvas.getContext('2d'), viewport}).promise;
+            }));
+          }
+          Promise.all(renders).catch(()=>{});
+        }).catch(()=>{
+          msg.style.display='block';
+          msg.innerHTML = '<span class="text-warning">No se pudo renderizar la vista previa, pero puedes continuar.</span>';
+        });
+
+        document.getElementById('btnConfirmarEnvioZnuny').onclick = ()=>{
+          if(!confirm('¿Estás seguro de enviar este lineamiento a Znuny?')) return;
+          modal.hide();
+          enviarFinalizar(payload);
+        };
+      })
+      .catch(()=>{ocultarLoading(); btn.disabled=false; alert('No se pudo generar la vista previa. Intenta de nuevo.');});
+    }
+
+    function enviarFinalizar(payload){
       const btn=document.getElementById('btnFinalizar');
       btn.disabled=true; btn.innerHTML='<span class="spinner-border spinner-border-sm me-1"></span> Guardando...';
       mostrarLoading('Guardando lineamiento y cerrando ticket en Znuny...');
       fetch(FINALIZAR_URL,{method:'POST',headers:{'Content-Type':'application/json','X-CSRFToken':CSRF},
-        body:JSON.stringify({ filas, modo:MODO, ticket:TICKET_NV })})
+        body:JSON.stringify(payload)})
       .then(r=>r.json())
       .then(data=>{
         if(data.ok) window.location.href='{% url "mis_tickets" %}';
@@ -345,7 +425,7 @@
         else{ocultarLoading();btn.disabled=false;alert('Error al guardar: '+(data.error||'desconocido'));}
       })
       .catch(()=>{ocultarLoading();btn.disabled=false;alert('Error de conexion.');});
-    });
+    }
   </script>
 </body>
 </html>

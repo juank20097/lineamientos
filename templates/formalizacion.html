@@ -90,7 +90,7 @@
         <tbody>
           {% for grupo in grupos %}
           <tr data-ticket="{{ grupo.ticket_principal }}">
-            <td class="ps-4 py-3"><span class="fw-semibold" style="font-family:monospace;">#{{ grupo.ticket_principal }}</span></td>
+            <td class="ps-4 py-3"><span class="fw-semibold" style="font-family:monospace;" {% if grupo.asunto %}title="{{ grupo.asunto }}"{% endif %}>#{{ grupo.ticket_principal }}</span></td>
             <td>
               {% for firma in grupo.firmas %}
               <div class="d-flex align-items-center gap-2 mb-2">

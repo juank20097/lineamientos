@@ -81,7 +81,7 @@
         <tbody>
           {% for firma in firmas_pendientes %}
           <tr>
-            <td class="ps-4 py-3"><a href="{% ticket_url firma.formalizacion.lineamiento.ticket_principal %}" target="_blank" class="fw-semibold ticket-link" style="font-family:monospace;">#{{ firma.formalizacion.lineamiento.ticket_principal }}<i class="bi bi-box-arrow-up-right"></i></a></td>
+            <td class="ps-4 py-3"><a href="{% ticket_url firma.formalizacion.lineamiento.ticket_principal %}" target="_blank" class="fw-semibold ticket-link" style="font-family:monospace;" {% if firma.formalizacion.lineamiento.asunto %}title="{{ firma.formalizacion.lineamiento.asunto }}"{% endif %}>#{{ firma.formalizacion.lineamiento.ticket_principal }}<i class="bi bi-box-arrow-up-right"></i></a></td>
             <td style="color:#6b7280;">{{ firma.formalizacion.fecha_creacion|date:"d/m/Y H:i" }}</td>
             <td>
               <a href="{% url 'formalizacion_preview_autoridad_pdf' firma.pk %}" target="_blank" class="btn btn-sm fw-semibold text-white"
@@ -120,7 +120,7 @@
         <tbody>
           {% for firma in firmas_atendidas %}
           <tr style="opacity:.88;">
-            <td class="ps-4 py-3"><a href="{% ticket_url firma.formalizacion.lineamiento.ticket_principal %}" target="_blank" class="fw-semibold ticket-link" style="font-family:monospace;">#{{ firma.formalizacion.lineamiento.ticket_principal }}<i class="bi bi-box-arrow-up-right"></i></a></td>
+            <td class="ps-4 py-3"><a href="{% ticket_url firma.formalizacion.lineamiento.ticket_principal %}" target="_blank" class="fw-semibold ticket-link" style="font-family:monospace;" {% if firma.formalizacion.lineamiento.asunto %}title="{{ firma.formalizacion.lineamiento.asunto }}"{% endif %}>#{{ firma.formalizacion.lineamiento.ticket_principal }}<i class="bi bi-box-arrow-up-right"></i></a></td>
             <td style="color:#6b7280;">{{ firma.fecha_firma|date:"d/m/Y H:i" }}</td>
             <td>
               <a href="{{ firma.formalizacion.documento.url }}" target="_blank" class="btn btn-sm fw-semibold text-white"

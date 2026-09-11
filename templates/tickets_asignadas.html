@@ -91,7 +91,7 @@
         <tbody>
           {% for sol in solicitudes_asignadas %}
           <tr>
-            <td class="ps-4 py-3"><a href="{% ticket_url sol.ticket_principal %}" target="_blank" class="fw-semibold ticket-link" style="font-family:monospace;">#{{ sol.ticket_principal }}<i class="bi bi-box-arrow-up-right"></i></a></td>
+            <td class="ps-4 py-3"><a href="{% ticket_url sol.ticket_principal %}" target="_blank" class="fw-semibold ticket-link" style="font-family:monospace;" {% if sol.asunto %}title="{{ sol.asunto }}"{% endif %}>#{{ sol.ticket_principal }}<i class="bi bi-box-arrow-up-right"></i></a></td>
             <td>{% for d in sol.detalles.all %}
               <div class="d-flex align-items-center gap-1 mb-1">
                 {% if d.finalizado and not d.tiene_borrador_pendiente %}

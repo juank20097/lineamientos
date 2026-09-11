@@ -75,7 +75,7 @@
         <tbody>
           {% for firma in firmas_pendientes %}
           <tr>
-            <td class="ps-4 py-3"><a href="{% ticket_url firma.formalizacion.lineamiento.ticket_principal %}" target="_blank" class="fw-semibold ticket-link" style="font-family:monospace;">#{{ firma.formalizacion.lineamiento.ticket_principal }}<i class="bi bi-box-arrow-up-right"></i></a></td>
+            <td class="ps-4 py-3"><a href="{% ticket_url firma.formalizacion.lineamiento.ticket_principal %}" target="_blank" class="fw-semibold ticket-link" style="font-family:monospace;" {% if firma.formalizacion.lineamiento.asunto %}title="{{ firma.formalizacion.lineamiento.asunto }}"{% endif %}>#{{ firma.formalizacion.lineamiento.ticket_principal }}<i class="bi bi-box-arrow-up-right"></i></a></td>
             <td><span class="badge" style="font-size:.72rem;{% if firma.detalle.tipo == 'software' %}background:#eff6ff;color:#2563eb;{% elif firma.detalle.tipo == 'bdd' %}background:#f5f3ff;color:#7c3aed;{% else %}background:#fffbeb;color:#d97706;{% endif %}">{{ firma.detalle.get_tipo_display }}</span></td>
             <td><a href="{% ticket_url firma.detalle.ticket_interno %}" target="_blank" class="ticket-link" style="font-family:monospace;font-size:.82rem;">#{{ firma.detalle.ticket_interno }}<i class="bi bi-box-arrow-up-right"></i></a></td>
             <td><span class="badge bg-light text-dark border" style="font-size:.75rem;font-family:monospace;">{% if firma.version_generado %}v{{ firma.version_generado.version_display }}{% else %}&mdash;{% endif %}</span></td>
@@ -115,7 +115,7 @@
         <tbody>
           {% for firma in firmas_atendidas %}
           <tr style="opacity:.88;">
-            <td class="ps-4 py-3"><a href="{% ticket_url firma.formalizacion.lineamiento.ticket_principal %}" target="_blank" class="fw-semibold ticket-link" style="font-family:monospace;">#{{ firma.formalizacion.lineamiento.ticket_principal }}<i class="bi bi-box-arrow-up-right"></i></a></td>
+            <td class="ps-4 py-3"><a href="{% ticket_url firma.formalizacion.lineamiento.ticket_principal %}" target="_blank" class="fw-semibold ticket-link" style="font-family:monospace;" {% if firma.formalizacion.lineamiento.asunto %}title="{{ firma.formalizacion.lineamiento.asunto }}"{% endif %}>#{{ firma.formalizacion.lineamiento.ticket_principal }}<i class="bi bi-box-arrow-up-right"></i></a></td>
             <td><span class="badge" style="font-size:.72rem;{% if firma.detalle.tipo == 'software' %}background:#eff6ff;color:#2563eb;{% elif firma.detalle.tipo == 'bdd' %}background:#f5f3ff;color:#7c3aed;{% else %}background:#fffbeb;color:#d97706;{% endif %}">{{ firma.detalle.get_tipo_display }}</span></td>
             <td><a href="{% ticket_url firma.detalle.ticket_interno %}" target="_blank" class="ticket-link" style="font-family:monospace;font-size:.82rem;">#{{ firma.detalle.ticket_interno }}<i class="bi bi-box-arrow-up-right"></i></a></td>
             <td><span class="badge bg-light text-dark border" style="font-size:.75rem;font-family:monospace;">{% if firma.version_generado %}v{{ firma.version_generado.version_display }}{% else %}&mdash;{% endif %}</span></td>

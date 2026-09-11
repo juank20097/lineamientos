@@ -1342,6 +1342,7 @@ def _agrupar_firmas_por_ticket(firmas):
             indice[ticket] = {
                 'ticket_principal': ticket,
                 'lineamiento_id': firma.formalizacion.lineamiento_id,
+                'asunto': firma.formalizacion.lineamiento.asunto,
                 'firmas': [],
             }
             grupos.append(indice[ticket])
@@ -2145,14 +2146,11 @@ def _guardar_filas_preservando_fecha(generado, filas):
     generado.filas.exclude(orden__in=ordenes_nuevos).delete()
 
 
-# ── AJAX: GUARDAR BORRADOR ─────────────────────────────────────────────────────
-
-@login_required
-@require_POST
-def guardar_borrador_ajax(request, detalle_id):
-    detalle = get_object_or_404(LineamientoDetalle, pk=detalle_id, usuario_asignado=request.user)
-    data    = json.loads(request.body)
-    filas   = data.get('filas', [])
+def _guardar_borrador(detalle, data, request):
+    """Crea/actualiza el LineamientoGenerado en borrador (es_borrador=True) de
+    un detalle con las filas y datos BDD recibidos del frontend. Reutilizada
+    por guardar_borrador_ajax y por el preview de PDF previo a finalizar."""
+    filas = data.get('filas', [])
 
     generado, _creado = LineamientoGenerado.objects.get_or_create(
         detalle=detalle, es_borrador=True, version=Decimal('0.0'),
@@ -2169,12 +2167,42 @@ def guardar_borrador_ajax(request, detalle_id):
     if bdd_sequences is not None: generado.bdd_sequences = bdd_sequences
 
     if detalle.tipo == 'software':
-        generado.chat_estado = request.session.get(f'chat_sw_{detalle_id}')
+        generado.chat_estado = request.session.get(f'chat_sw_{detalle.pk}')
 
     generado.save()
-
     _guardar_filas_preservando_fecha(generado, filas)
+    return generado
+
+
+# ── AJAX: GUARDAR BORRADOR ─────────────────────────────────────────────────────
+
+@login_required
+@require_POST
+def guardar_borrador_ajax(request, detalle_id):
+    detalle = get_object_or_404(LineamientoDetalle, pk=detalle_id, usuario_asignado=request.user)
+    data    = json.loads(request.body)
+    _guardar_borrador(detalle, data, request)
     return JsonResponse({'ok': True})
+
+
+# ── AJAX: PREVIEW PDF (antes de finalizar) ────────────────────────────────────
+
+@login_required
+@require_POST
+def preview_pdf_lineamiento_ajax(request, detalle_id):
+    """Genera un preview del PDF con las filas/datos actuales (aun sin
+    finalizar), guardandolos primero como borrador (es_borrador=True) para
+    poder reutilizar _generar_pdf_lineamientos tal cual. Si el usuario cierra
+    el preview sin confirmar el envio a Znuny, el borrador queda guardado
+    normalmente (no se descarta), igual que con 'Guardar borrador'."""
+    detalle  = get_object_or_404(LineamientoDetalle, pk=detalle_id, usuario_asignado=request.user)
+    data     = json.loads(request.body)
+    generado = _guardar_borrador(detalle, data, request)
+    buf = _generar_pdf_lineamientos(
+        detalle.lineamiento, {detalle.pk: generado.pk},
+        watermark=True, tipos_incluir=[detalle.tipo],
+    )
+    return HttpResponse(buf.read(), content_type='application/pdf')
 
 
 # ── AJAX: FINALIZAR ───────────────────────────────────────────────────────────
@@ -2593,8 +2621,11 @@ def crear_lineamiento_view(request):
                 'usuarios_software': usuarios_software,
                 'usuarios_bdd': usuarios_bdd, 'usuarios_infraestructura': usuarios_infraestructura, 'errores': errores,
             })
+        resultado_znuny = _run_script(ZNUNY_SCRIPT_VERIFICAR, [ticket_principal], timeout=60)
+        asunto = resultado_znuny.get('asunto', '') or ''
         lin = Lineamiento.objects.create(
-            ticket_principal=ticket_principal, id_numerico=id_numerico, creado_por=request.user,
+            ticket_principal=ticket_principal, id_numerico=id_numerico, asunto=asunto,
+            creado_por=request.user,
         )
         for d in detalles_validos:
             LineamientoDetalle.objects.create(lineamiento=lin, **d)

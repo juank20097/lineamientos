@@ -131,7 +131,7 @@
             {% for f in repositorio %}
             <tr class="fila-repo" data-codigo="{{ f.codigo_documento|lower }}" data-ticket="{{ f.lineamiento.ticket_principal }}" data-fecha="{{ f.fecha_cierre_ticket_padre|date:'Y-m-d' }}">
               <td class="ps-4 py-3 fw-semibold" style="font-family:monospace;">{{ f.codigo_documento }}</td>
-              <td><a href="{% ticket_url f.lineamiento.ticket_principal %}" target="_blank" class="fw-semibold ticket-link" style="font-family:monospace;">#{{ f.lineamiento.ticket_principal }}<i class="bi bi-box-arrow-up-right"></i></a></td>
+              <td><a href="{% ticket_url f.lineamiento.ticket_principal %}" target="_blank" class="fw-semibold ticket-link" style="font-family:monospace;" {% if f.lineamiento.asunto %}title="{{ f.lineamiento.asunto }}"{% endif %}>#{{ f.lineamiento.ticket_principal }}<i class="bi bi-box-arrow-up-right"></i></a></td>
               <td>
                 {% for tipo in f.tipos_incluidos %}
                   {% if tipo == 'software' %}<span class="badge-tipo badge-sw">SW</span>
