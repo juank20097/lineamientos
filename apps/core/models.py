@@ -92,13 +92,19 @@ class LineamientoDetalle(models.Model):
         return self.generados.filter(es_borrador=False).exists()
 
     @property
+    def borrador_pendiente(self):
+        """El LineamientoGenerado en borrador (es_borrador=True) de este
+        detalle, si existe, o None."""
+        return self.generados.filter(es_borrador=True).first()
+
+    @property
     def tiene_borrador_pendiente(self):
         """True si hay una nueva version en progreso (borrador) todavia sin
         finalizar, aunque ya exista una version anterior formalizada/firmada.
         Se usa para que el ticket vuelva a listarse como pendiente ('Mis
         solicitudes') en cuanto se guarda el borrador de la nueva version,
         en vez de esperar a que se finalice."""
-        return self.generados.filter(es_borrador=True).exists()
+        return self.borrador_pendiente is not None
 
 
 MAX_IMAGENES_LINEAMIENTO = 3

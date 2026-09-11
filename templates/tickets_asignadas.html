@@ -94,10 +94,16 @@
             <td class="ps-4 py-3"><a href="{% ticket_url sol.ticket_principal %}" target="_blank" class="fw-semibold ticket-link" style="font-family:monospace;">#{{ sol.ticket_principal }}<i class="bi bi-box-arrow-up-right"></i></a></td>
             <td>{% for d in sol.detalles.all %}
               <div class="d-flex align-items-center gap-1 mb-1">
-                {% if d.finalizado %}
+                {% if d.finalizado and not d.tiene_borrador_pendiente %}
                   <i class="bi bi-check-circle-fill" style="color:#16a34a;font-size:.8rem;"></i>
+                {% elif d.tiene_borrador_pendiente %}
+                  <i class="bi bi-exclamation-triangle-fill motivo-tooltip" style="color:#d97706;font-size:.8rem;cursor:help;"
+                     data-bs-toggle="tooltip" data-bs-placement="top"
+                     title="{% if d.finalizado %}Finalizado, pero {{ d.borrador_pendiente.creado_por.get_full_name|default:d.borrador_pendiente.creado_por.username|default:'un usuario' }} dejó una nueva versión en borrador sin terminar desde el {{ d.borrador_pendiente.fecha_creacion|date:'d/m/Y H:i' }}.{% else %}{{ d.borrador_pendiente.creado_por.get_full_name|default:d.borrador_pendiente.creado_por.username|default:'un usuario' }} tiene un borrador en progreso sin finalizar desde el {{ d.borrador_pendiente.fecha_creacion|date:'d/m/Y H:i' }}.{% endif %}"></i>
                 {% else %}
-                  <i class="bi bi-circle" style="color:#d1d5db;font-size:.8rem;"></i>
+                  <i class="bi bi-circle motivo-tooltip" style="color:#d1d5db;font-size:.8rem;cursor:help;"
+                     data-bs-toggle="tooltip" data-bs-placement="top"
+                     title="Aún no se ha finalizado ninguna versión."></i>
                 {% endif %}
                 <span class="badge" style="font-size:.72rem;{% if d.tipo == 'software' %}background:#eff6ff;color:#2563eb;{% elif d.tipo == 'bdd' %}background:#f5f3ff;color:#7c3aed;{% else %}background:#fffbeb;color:#d97706;{% endif %}">{{ d.get_tipo_display }}</span>
               </div>
@@ -144,6 +150,9 @@
 
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
   <script>
+    // ── TOOLTIPS: motivo por el que un detalle sigue pendiente ──
+    document.querySelectorAll('.motivo-tooltip').forEach(el => new bootstrap.Tooltip(el));
+
     // ── BARRAS DE PROGRESO + BOTON DESCARGAR ──
     (function(){
       const PROGRESO = JSON.parse('{{ progreso_json|escapejs }}' || '{}');

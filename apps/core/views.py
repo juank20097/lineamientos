@@ -1290,6 +1290,11 @@ def _solicitudes_staff(user):
     ).prefetch_related(
         'detalles__usuario_asignado', 'detalles__generados',
     ).order_by('-fecha_creacion'))
+    # Un Lineamiento sin ningun LineamientoDetalle es un registro huerfano
+    # (ej. duplicado por error en la creacion): no hay nada que atender ni
+    # que dar por finalizado, asi que se excluye de ambas bandejas en vez
+    # de quedar atascado en "asignadas" para siempre (total=0 -> progreso=0).
+    solicitudes = [s for s in solicitudes if s.detalles.all()]
     progreso = {}
     for sol in solicitudes:
         detalles    = list(sol.detalles.all())
