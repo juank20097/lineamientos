@@ -148,11 +148,9 @@
           <button class="tab-btn" data-tab="tab-tablas"><i class="bi bi-table"></i>Tablas</button>
           <button class="tab-btn" data-tab="tab-sql"><i class="bi bi-code-slash"></i>SQL</button>
           <button class="tab-btn" data-tab="tab-imagenes"><i class="bi bi-images"></i>Imágenes</button>
-          {% if modo == 'nuevo' and not ya_generado %}
           <button id="btnReiniciarSQL" style="margin-left:auto;background:none;border:1px solid #e2e8f0;color:#94a3b8;border-radius:20px;padding:3px 12px;font-size:.75rem;cursor:pointer;align-self:center;margin-right:8px;">
             <i class="bi bi-arrow-counterclockwise me-1"></i>Reiniciar
           </button>
-          {% endif %}
         </div>
         <div class="tab-content">
           <div class="tab-pane active" id="tab-diagrama">
@@ -186,16 +184,7 @@
           <!-- Tab SQL -->
           <div class="tab-pane" id="tab-sql">
             <div style="display:flex;gap:8px;padding:8px 12px;background:#2a2a3e;flex-shrink:0;">
-              <button id="btnEditarSQL" style="background:#7c3aed;color:#fff;border:none;border-radius:6px;padding:5px 14px;font-size:.8rem;cursor:pointer;display:flex;align-items:center;gap:6px;">
-                <i class="bi bi-pencil-square me-1"></i>Editar SQL
-              </button>
-              <button id="btnGuardarSQL" style="display:none;background:#16a34a;color:#fff;border:none;border-radius:6px;padding:5px 14px;font-size:.8rem;cursor:pointer;display:none;align-items:center;gap:6px;">
-                <i class="bi bi-arrow-repeat me-1"></i>Aplicar cambios
-              </button>
-              <button id="btnCancelarSQL" style="display:none;background:#475569;color:#fff;border:none;border-radius:6px;padding:5px 14px;font-size:.8rem;cursor:pointer;">
-                Cancelar
-              </button>
-              <span id="sqlEditHint" style="font-size:.75rem;color:#94a3b8;align-self:center;display:none;">Edita el SQL y haz clic en <strong style="color:#86efac;">Aplicar cambios</strong> para actualizar el diagrama y las tablas.</span>
+              <span style="font-size:.75rem;color:#94a3b8;align-self:center;"><i class="bi bi-lock-fill me-1"></i>El SQL no se puede editar en el sistema. Para cambiarlo, reinicia y carga un archivo .sql nuevo.</span>
             </div>
             <textarea id="sqlRaw" readonly></textarea>
           </div>
@@ -238,7 +227,7 @@
         </div>
         <table class="doc-table" id="docTable" style="display:none;">
           <thead>
-            <tr><th>#</th><th>Responsable</th><th>Tipo</th><th>Necesidad</th><th>Lineamiento</th><th>Mecanismo de Implementación</th><th>Fecha</th><th>Observación</th><th></th></tr>
+            <tr><th title="Si se marca, la fila NO se elimina al cargar un nuevo script SQL">Mantener</th><th>#</th><th>Responsable</th><th>Tipo</th><th>Necesidad</th><th>Lineamiento</th><th>Mecanismo de Implementación</th><th>Fecha</th><th>Observación</th><th></th></tr>
           </thead>
           <tbody id="docBody"></tbody>
           <tfoot>
@@ -321,126 +310,6 @@
       });
     });
 
-    // ── VALIDADOR DE ESTRUCTURA SQL ──
-    function validarEstructuraSQL(sql){
-      const errores = [];
-
-      // 1. Parentesis balanceados
-      let depth = 0;
-      for(const ch of sql){
-        if(ch==='(') depth++;
-        else if(ch===')') depth--;
-        if(depth < 0){ errores.push('Paréntesis de cierre ) sin apertura correspondiente.'); depth=0; }
-      }
-      if(depth > 0) errores.push(`${depth} paréntesis sin cerrar — falta(n) ${depth} cierre(s) ).`);
-
-      // 2. Cada CREATE TABLE debe terminar con ); 
-      const nCreate  = (sql.match(/CREATE\s+TABLE/gi)||[]).length;
-      const nCerrado = (sql.match(/CREATE\s+TABLE[\s\S]+?\)\s*;/gi)||[]).length;
-      if(nCreate > 0 && nCerrado < nCreate)
-        errores.push(`${nCreate - nCerrado} CREATE TABLE sin cerrar correctamente con );`);
-
-      // 3. Cada CREATE SEQUENCE debe tener nombre valido
-      for(const m of sql.matchAll(/CREATE\s+SEQUENCE\s+(\S+)/gi)){
-        if(!/^[\w.]+$/.test(m[1]))
-          errores.push(`Nombre de secuencia inválido: "${m[1]}"`);
-      }
-
-      // 4. Dentro de cada CREATE TABLE, cada linea de columna debe tener nombre + tipo
-      for(const m of sql.matchAll(/CREATE\s+TABLE\s+\S+\s*\(([\s\S]+?)\)\s*;/gi)){
-        const body = m[1];
-        const lineas = body.split('\n').map(l=>l.trim().replace(/,$/, '')).filter(l=>l &&
-          !l.match(/^(CONSTRAINT|PRIMARY|FOREIGN|UNIQUE|CHECK|--)/i));
-        lineas.forEach(line=>{
-          if(line && !line.match(/^\w+\s+\w+/)){
-            errores.push(`Definición de columna inválida: "${line.substring(0,60)}"`);
-          }
-        });
-      }
-
-      // 5. ALTER TABLE debe tener ADD CONSTRAINT o ADD COLUMN
-      for(const m of sql.matchAll(/ALTER\s+TABLE\s+\S+\s+(.*?);/gi)){
-        const body = m[1].trim();
-        if(!body.match(/^(ADD|MODIFY|DROP|RENAME)/i))
-          errores.push(`ALTER TABLE con cláusula desconocida: "${body.substring(0,60)}"`);
-      }
-
-      return errores;
-    }
-
-    // ── EDITAR SQL ──
-    let sqlBackup = '';
-    const sqlRaw      = document.getElementById('sqlRaw');
-    const btnEditar   = document.getElementById('btnEditarSQL');
-    const btnGuardar  = document.getElementById('btnGuardarSQL');
-    const btnCancelar = document.getElementById('btnCancelarSQL');
-    const sqlHint     = document.getElementById('sqlEditHint');
-
-    btnEditar.addEventListener('click', ()=>{
-      sqlBackup = sqlRaw.value;
-      sqlRaw.removeAttribute('readonly');
-      sqlRaw.style.background = '#12122a';
-      sqlRaw.style.outline    = '2px solid #7c3aed';
-      sqlRaw.focus();
-      btnEditar.style.display   = 'none';
-      btnGuardar.style.display  = 'flex';
-      btnCancelar.style.display = 'block';
-      sqlHint.style.display     = 'block';
-    });
-
-    btnCancelar.addEventListener('click', ()=>{
-      sqlRaw.value = sqlBackup;
-      sqlRaw.setAttribute('readonly', '');
-      sqlRaw.style.background = '#1e1e2e';
-      sqlRaw.style.outline    = 'none';
-      btnEditar.style.display   = 'flex';
-      btnGuardar.style.display  = 'none';
-      btnCancelar.style.display = 'none';
-      sqlHint.style.display     = 'none';
-    });
-
-    btnGuardar.addEventListener('click', ()=>{
-      const nuevoSQL = sqlRaw.value;
-      if(!nuevoSQL.trim()){alert('El SQL no puede estar vacio.'); return;}
-
-      // ── VALIDACION DE ESTRUCTURA ──
-      const erroresSQL = validarEstructuraSQL(nuevoSQL);
-      if(erroresSQL.length){
-        alert('El SQL tiene errores de estructura:\n\n' + erroresSQL.map((e,i)=>`${i+1}. ${e}`).join('\n'));
-        return;
-      }
-      mostrarLoading('Reparsando SQL y actualizando diagrama...');
-      // Re-parsear en el frontend via AJAX (reutilizando el endpoint con un Blob)
-      const blob   = new Blob([nuevoSQL], {type:'text/plain'});
-      const file   = new File([blob], 'schema.sql', {type:'text/plain'});
-      const fd     = new FormData(); fd.append('sql_file', file);
-      fetch(CARGAR_URL,{method:'POST',headers:{'X-CSRFToken':CSRF},body:fd})
-      .then(r=>r.json())
-      .then(data=>{
-        ocultarLoading();
-        if(!data.ok){alert('Error al parsear: '+data.error); return;}
-        // Actualizar datos globales
-        SCHEMA    = data.schema    || SCHEMA;
-        TABLES    = data.tables    || {};
-        SEQUENCES = data.sequences || [];
-        // Cerrar modo edicion
-        sqlRaw.setAttribute('readonly','');
-        sqlRaw.style.background = '#1e1e2e';
-        sqlRaw.style.outline    = 'none';
-        btnEditar.style.display   = 'flex';
-        btnGuardar.style.display  = 'none';
-        btnCancelar.style.display = 'none';
-        sqlHint.style.display     = 'none';
-        // Actualizar SQL regenerado
-        actualizarSQL();
-        // Actualizar diagrama y tablas
-        tablePositions = {};
-        dibujarDiagrama();
-        renderTablasTab();
-      })
-      .catch(()=>{ ocultarLoading(); alert('Error de conexion.'); });
-    });
-
     // ── REINICIAR SQL ──
     document.getElementById('btnReiniciarSQL')?.addEventListener('click',()=>{
       if(!confirm('\u00bfReiniciar? Se perder\u00e1 el an\u00e1lisis actual del SQL.')) return;
@@ -515,10 +384,10 @@
     });
 
     // ── DATOS ──
-    let SCHEMA=''; let TABLES={}; let SEQUENCES=[];
+    let SCHEMA=''; let TABLES={}; let SEQUENCES=[]; let PL_OBJECTS=[];
 
     function procesarSQL(data){
-      SCHEMA=data.schema||''; TABLES=data.tables||{}; SEQUENCES=data.sequences||[];
+      SCHEMA=data.schema||''; TABLES=data.tables||{}; SEQUENCES=data.sequences||[]; PL_OBJECTS=data.pl_objects||[];
       document.getElementById('uploadZone').style.display='none';
       document.getElementById('tabsPanel').classList.add('visible');
       renderTablasTab();
@@ -527,20 +396,32 @@
       generarFilasDesdeSQL();
     }
 
+    // Al cargar un nuevo script, elimina las filas que NO tengan marcado el
+    // check "Mantener" (columna 0): esas se consideran del script anterior y
+    // ya no aplican. Las que si estan marcadas se conservan tal cual.
+    function quitarFilasSinMantener(){
+      [...docBody.querySelectorAll('tr')].forEach(tr=>{
+        const chk = tr.children[0].querySelector('.chk-mantener');
+        if(!chk || !chk.checked) tr.remove();
+      });
+    }
+
     // Genera automaticamente una fila en la tabla de lineamientos por cada
     // objeto detectado en el SQL cargado (tablas, PK, FK, indices, checks,
     // uniques y secuencias), dejando "necesidad" vacia para que el usuario
-    // describa el objetivo de negocio de cada una.
+    // describa el objetivo de negocio de cada una. Antes de agregarlas,
+    // elimina las filas existentes que no tengan el check "Mantener".
     function generarFilasDesdeSQL(){
+      quitarFilasSinMantener();
       emptyState.style.display='none'; docTable.style.display='table';
       const yaGeneradas = new Set(
-        [...docBody.querySelectorAll('tr')].map(tr=>tr.children[4].textContent.trim())
+        [...docBody.querySelectorAll('tr')].map(tr=>tr.children[5].textContent.trim())
       );
       const nuevasFilas = [];
-      const agregar = (lineamiento, observacion)=>{
+      const agregar = (lineamiento, observacion, mecanismo)=>{
         if(yaGeneradas.has(lineamiento)) return;
         yaGeneradas.add(lineamiento);
-        nuevasFilas.push({necesidad:'', lineamiento, mecanismo:'DDL', observacion});
+        nuevasFilas.push({necesidad:'', lineamiento, mecanismo:mecanismo||'DDL', observacion});
       };
       Object.entries(TABLES).forEach(([tname, t])=>{
         agregar(`Crear la tabla ${tname}`, t.table_comment || '');
@@ -561,24 +442,41 @@
         });
         (t.indexes||[]).forEach(idx=>{
           agregar(`Crear el ${idx.unique?'índice único':'índice'} ${idx.name} en ${tname}`,
-            `Columnas: ${idx.columns.map(c=>c.name+' '+c.order).join(', ')}`);
+            `Columnas: ${idx.columns.map(c=>c.order?`${c.name} ${c.order}`:c.name).join(', ')}`);
         });
       });
       SEQUENCES.forEach(seq=>{
         agregar(`Crear la secuencia ${seq}`, '');
       });
+      const ETIQUETA_PL = {
+        package:    'Crear el package',
+        chain:      'Crear el Chain',
+        program:    'Crear el programa',
+        chain_step: 'Crear el Step',
+        chain_rule: 'Crear la Rule',
+        job:        'Crear el Job',
+      };
+      PL_OBJECTS.forEach(obj=>{
+        const etiqueta = ETIQUETA_PL[obj.tipo] || 'Crear el objeto';
+        agregar(`${etiqueta} ${obj.nombre}`, obj.detalle || '', 'PL/SQL');
+      });
       nuevasFilas.forEach(f=>docBody.appendChild(crearFila(f)));
-      if(nuevasFilas.length) renumerar();
+      renumerar();
+      if(docBody.children.length===0){ emptyState.style.display='block'; docTable.style.display='none'; }
       document.getElementById('btnFinalizar').classList.add('visible');
     }
 
     // Vacia la tabla de lineamientos y deja solo la fila base inicial (la
     // misma con la que arranca la pantalla cuando no hay nada precargado),
     // ya que al reiniciar el analisis del SQL el usuario esta empezando de
-    // cero pero la fila transversal siempre debe estar presente.
+    // cero pero la fila transversal siempre debe estar presente. Respeta el
+    // check "Mantener": las filas marcadas sobreviven al reinicio igual que
+    // al cargar un script nuevo.
     function quitarFilasGeneradasDesdeSQL(){
-      docBody.innerHTML='';
-      docBody.appendChild(crearFila(FILA_INICIAL_TRANSVERSAL));
+      quitarFilasSinMantener();
+      if(docBody.children.length===0){
+        docBody.appendChild(crearFila(FILA_INICIAL_TRANSVERSAL));
+      }
       emptyState.style.display='none'; docTable.style.display='table';
       renumerar();
     }
@@ -835,11 +733,12 @@
     }
 
     // ── GENERAR SQL actualizado ──
+    // No se hace referencia a ningun esquema (ej. IESS_OWNER.TABLA): solo el
+    // nombre de la tabla, sin importar el esquema con el que vino en el .sql.
     function actualizarSQL(){
-      const schema=SCHEMA.toUpperCase();
       let sql='';
       for(const [tname,tdata] of Object.entries(TABLES)){
-        sql+=`CREATE TABLE ${schema}.${tname} (\n`;
+        sql+=`CREATE TABLE ${tname} (\n`;
         const lines=tdata.columns.map(col=>{
           let def=`    ${col.name.padEnd(30)} ${col.type}`;
           if(col.size) def+=`(${col.size})`;
@@ -854,11 +753,11 @@
         sql+=lines.join(',\n')+'\n);\n\n';
         // Table comment
         if(tdata.table_comment){
-          sql+=`COMMENT ON TABLE ${schema}.${tname} IS\n    '${tdata.table_comment}';\n\n`;
+          sql+=`COMMENT ON TABLE ${tname} IS\n    '${tdata.table_comment}';\n\n`;
         }
         // Comments
         tdata.columns.filter(c=>c.description).forEach(col=>{
-          sql+=`COMMENT ON COLUMN ${schema}.${tname}.${col.name} IS\n    '${col.description}';\n`;
+          sql+=`COMMENT ON COLUMN ${tname}.${col.name} IS\n    '${col.description}';\n`;
         });
         sql+='\n';
         // CHECKs
@@ -872,18 +771,17 @@
         // FKs
         tdata.fks.forEach(fk=>{
           const fkName = fk.name || `${tname.toLowerCase()}_fk`;
-          const refTable = fk.ref_schema ? `${fk.ref_schema}.${fk.ref_table}` : fk.ref_table;
-          sql+=`ALTER TABLE ${tname} ADD CONSTRAINT ${fkName} FOREIGN KEY ( ${fk.columns.join(', ')} ) REFERENCES ${refTable} ( ${fk.ref_columns.join(', ')} );\n`;
+          sql+=`ALTER TABLE ${tname} ADD CONSTRAINT ${fkName} FOREIGN KEY ( ${fk.columns.join(', ')} ) REFERENCES ${fk.ref_table} ( ${fk.ref_columns.join(', ')} );\n`;
         });
         // Indexes
         (tdata.indexes||[]).forEach(idx=>{
-          const cols = idx.columns.map(c=>`${c.name} ${c.order||'ASC'}`).join(', ');
+          const cols = idx.columns.map(c=>c.order?`${c.name} ${c.order}`:c.name).join(', ');
           sql+=`CREATE ${idx.unique?'UNIQUE ':''}INDEX ${idx.name}\n   ON ${tname} (${cols});\n\n`;
         });
       }
       // Sequences
       SEQUENCES.forEach(seq=>{
-        sql+=`CREATE SEQUENCE ${schema}.${seq}\n    START WITH 1\n    INCREMENT BY 1;\n\n`;
+        sql+=`CREATE SEQUENCE ${seq}\n    START WITH 1\n    INCREMENT BY 1;\n\n`;
       });
       document.getElementById('sqlRaw').value=sql;
     }
@@ -901,11 +799,12 @@
     function crearFila(g){
       const tr=document.createElement('tr');
       tr.innerHTML=`
+        <td style="text-align:center;"><input type="checkbox" class="chk-mantener" title="No borrar esta fila al cargar un nuevo script SQL" ${g?.mantener?'checked':''}></td>
         <td class="num"></td><td>${RESPONSABLE}</td><td class="tipo">BDD</td>
         <td contenteditable="true">${g?.necesidad??''}</td>
         <td contenteditable="true">${g?.lineamiento??''}</td>
         <td contenteditable="true">${g?.mecanismo??''}</td>
-        <td class="fecha">${g?.fecha??HOY}</td>
+        <td class="fecha" contenteditable="true">${g?.fecha??HOY}</td>
         <td contenteditable="true">${g?.observacion??''}</td>
         <td class="td-acc"><button class="btn-del"><i class="bi bi-trash3"></i></button></td>`;
       tr.querySelector('.btn-del').addEventListener('click',()=>{
@@ -957,7 +856,7 @@
     document.getElementById('btnGuardarBorrador').addEventListener('click', ()=>{
       const filas = [...docBody.querySelectorAll('tr')].map(tr=>{
         const c = tr.querySelectorAll('td');
-        return {necesidad:c[3].innerText, lineamiento:c[4].innerText, mecanismo:c[5].innerText, observacion:c[7].innerText};
+        return {mantener:c[0].querySelector('.chk-mantener').checked, necesidad:c[4].innerText, lineamiento:c[5].innerText, mecanismo:c[6].innerText, fecha:c[7].innerText, observacion:c[8].innerText};
       });
       const btn = document.getElementById('btnGuardarBorrador');
       btn.disabled = true;
@@ -1021,7 +920,7 @@
 
       const filas=[...docBody.querySelectorAll('tr')].map(tr=>{
         const c=tr.querySelectorAll('td');
-        return {necesidad:c[3].innerText,lineamiento:c[4].innerText,mecanismo:c[5].innerText,observacion:c[7].innerText};
+        return {mantener:c[0].querySelector('.chk-mantener').checked, necesidad:c[4].innerText,lineamiento:c[5].innerText,mecanismo:c[6].innerText,fecha:c[7].innerText,observacion:c[8].innerText};
       });
       if(!filas.length){alert('No hay lineamientos para guardar.');return;}
 

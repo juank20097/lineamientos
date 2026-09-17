@@ -87,13 +87,15 @@ def _limpiar_ticket(valor):
 
 
 def _fila_a_dict(f):
-    """Serializa una LineamientoGeneradoFila incluyendo su fecha de creacion
-    original (dd/mm/aaaa), para que el frontend la preserve en vez de
-    reemplazarla por la fecha del dia al recargar/editar una version."""
+    """Serializa una LineamientoGeneradoFila incluyendo su fecha (dd/mm/aaaa),
+    para que el frontend la preserve en vez de reemplazarla por la fecha del
+    dia al recargar/editar una version. Si el usuario edito la fecha a mano
+    (fecha_texto), esa prevalece sobre la fecha_creacion real."""
     return {
         'necesidad': f.necesidad, 'lineamiento': f.lineamiento,
         'mecanismo': f.mecanismo, 'observacion': f.observacion,
-        'fecha': timezone.localtime(f.fecha_creacion).strftime('%d/%m/%Y'),
+        'fecha': f.fecha_texto or timezone.localtime(f.fecha_creacion).strftime('%d/%m/%Y'),
+        'mantener': f.mantener_en_carga_sql,
     }
 
 
@@ -543,7 +545,7 @@ def _generar_pdf_lineamientos(lin, version_map, watermark=False, tipos_incluir=N
             story.append(Spacer(1, 4*mm))
 
             for tname, tdata in tables.items():
-                story.append(Paragraph(f'{schema}.{tname}', S_SUBTIT))
+                story.append(Paragraph(tname, S_SUBTIT))
                 story.append(Spacer(1, 2*mm))
                 tbl_hdr = [Paragraph(h, estilo('th', fontName='Helvetica-Bold', fontSize=7, alignment=TA_CENTER, textColor=colors.white))
                            for h in ['Campo', 'Tipo', 'Tamaño', 'Nulo', 'Descripción']]
@@ -740,14 +742,32 @@ def _extraer_bloque_parentesis(content, pos_apertura):
     return content[pos_apertura + 1:], len(content)
 
 
+def _split_respetando_parentesis(texto):
+    # Divide por comas de nivel superior, sin partir dentro de funciones/
+    # expresiones anidadas (ej. "ESTADO, NVL(pagbancen, 'X')" -> 2 partes,
+    # no 3, porque la coma dentro de NVL(...) no cuenta).
+    partes = []; actual = ''; profundidad = 0
+    for ch in texto:
+        if ch == '(':
+            profundidad += 1; actual += ch
+        elif ch == ')':
+            profundidad -= 1; actual += ch
+        elif ch == ',' and profundidad == 0:
+            partes.append(actual); actual = ''
+        else:
+            actual += ch
+    partes.append(actual)
+    return [p.strip() for p in partes if p.strip()]
+
+
 def _parse_sql(content):
     # Eliminar bloques /* ... */ antes de parsear (FKs comentadas, etc)
     content = re.sub(r'/\*.*?\*/', '', content, flags=re.DOTALL)
+    # No se hace ninguna referencia a esquemas (ej. IESS_OWNER.TABLA): si el
+    # script trae un esquema como prefijo, se ignora por completo y solo se
+    # toma el nombre de la tabla/secuencia/etc, tanto en pantalla como en el
+    # documento generado.
     schema = None; tables = {}; sequences = []
-    # Esquema es opcional: soporta tanto "CREATE TABLE ESQUEMA.TABLA" como "CREATE TABLE TABLA"
-    m = re.search(r'CREATE\s+TABLE\s+(?:(\w+)\.)?(\w+)', content, re.I)
-    if m and m.group(1):
-        schema = m.group(1).upper()
     for m in re.finditer(r'CREATE\s+SEQUENCE\s+(?:(\w+)\.)?(\w+)', content, re.I):
         sequences.append(m.group(2).upper())
     # Se busca el '(' de apertura y se extrae el bloque respetando parentesis anidados,
@@ -808,7 +828,6 @@ def _parse_sql(content):
             tables[tname]['fks'].append({
                 'name':        m.group(2),
                 'columns':     [c.strip().upper() for c in m.group(3).split(',')],
-                'ref_schema':  m.group(4).upper() if m.group(4) else None,
                 'ref_table':   m.group(5).upper(),
                 'ref_columns': [c.strip().upper() for c in m.group(6).split(',')],
             })
@@ -829,22 +848,84 @@ def _parse_sql(content):
             cols = [c.strip().upper() for c in m.group(3).split(',')]
             tables[tname]['uniques'].append({'name': m.group(2), 'columns': cols})
     for m in re.finditer(
-        r'CREATE\s+(UNIQUE\s+)?INDEX\s+(?:\w+\.)?(\w+)\s+ON\s+(?:\w+\.)?(\w+)\s*\(([^)]+)\)',
-        content, re.I | re.DOTALL
+        r'CREATE\s+(UNIQUE\s+)?INDEX\s+(?:\w+\.)?(\w+)\s+ON\s+(?:\w+\.)?(\w+)\s*\(',
+        content, re.I
     ):
         tname = m.group(3).upper()
         if tname in tables:
+            body, _fin = _extraer_bloque_parentesis(content, m.end() - 1)
             cols = []
-            for c in m.group(4).split(','):
-                c = c.strip()
-                cm = re.match(r'(\w+)\s*(ASC|DESC)?', c, re.I)
-                cols.append({'name': cm.group(1).upper(), 'order': (cm.group(2) or 'ASC').upper()})
+            for c in _split_respetando_parentesis(body):
+                # Columna simple ("ESTADO", "ESTADO DESC") o expresion/funcion
+                # ("NVL(pagbancen, 'X')"): si es un identificador simple se
+                # separa el ASC/DESC; si es una expresion, se deja completa.
+                cm = re.match(r'^(\w+)\s*(ASC|DESC)?$', c, re.I)
+                if cm:
+                    cols.append({'name': cm.group(1).upper(), 'order': (cm.group(2) or 'ASC').upper()})
+                else:
+                    cols.append({'name': c, 'order': ''})
             tables[tname]['indexes'].append({
                 'name':   m.group(2),
                 'unique': bool(m.group(1)),
                 'columns': cols,
             })
-    return {'schema': schema, 'tables': tables, 'sequences': sequences, 'duplicadas': duplicadas}
+    pl_objects = _parse_pl_scheduler(content)
+    return {'schema': schema, 'tables': tables, 'sequences': sequences, 'duplicadas': duplicadas, 'pl_objects': pl_objects}
+
+
+def _parse_pl_scheduler(content):
+    """Detecta objetos de PL/SQL / DBMS_SCHEDULER (packages, chains, programs,
+    chain steps, chain rules y jobs) para generar tambien sus filas de
+    lineamiento, ademas de las tablas/indices/secuencias de _parse_sql."""
+    objetos = []
+
+    for m in re.finditer(r'CREATE\s+(?:OR\s+REPLACE\s+)?PACKAGE\s+(?:BODY\s+)?(?:\w+\.)?(\w+)', content, re.I):
+        objetos.append({'tipo': 'package', 'nombre': m.group(1), 'detalle': ''})
+
+    for m in re.finditer(
+        r"DBMS_SCHEDULER\.CREATE_CHAIN\s*\(\s*chain_name\s*=>\s*'([^']+)'(?:.*?comments\s*=>\s*'([^']*)')?",
+        content, re.I | re.DOTALL
+    ):
+        objetos.append({'tipo': 'chain', 'nombre': m.group(1), 'detalle': m.group(2) or ''})
+
+    for m in re.finditer(
+        r"DBMS_SCHEDULER\.CREATE_PROGRAM\s*\(\s*program_name\s*=>\s*'([^']+)'(?:.*?program_action\s*=>\s*'([^']*)')?(?:.*?comments\s*=>\s*'([^']*)')?",
+        content, re.I | re.DOTALL
+    ):
+        detalle = m.group(2) or ''
+        if m.group(3):
+            detalle = f'{detalle} — {m.group(3)}' if detalle else m.group(3)
+        objetos.append({'tipo': 'program', 'nombre': m.group(1), 'detalle': detalle})
+
+    for m in re.finditer(
+        r"DBMS_SCHEDULER\.DEFINE_CHAIN_STEP\s*\(\s*chain_name\s*=>\s*'([^']+)'.*?step_name\s*=>\s*'([^']+)'.*?program_name\s*=>\s*'([^']+)'",
+        content, re.I | re.DOTALL
+    ):
+        objetos.append({
+            'tipo': 'chain_step', 'nombre': m.group(2),
+            'detalle': f"Chain {m.group(1)} — ejecuta el programa {m.group(3)}",
+        })
+
+    for m in re.finditer(
+        r"DBMS_SCHEDULER\.DEFINE_CHAIN_RULE\s*\(\s*chain_name\s*=>\s*'([^']+)'.*?rule_name\s*=>\s*'([^']+)'.*?condition\s*=>\s*'([^']*)'.*?action\s*=>\s*'([^']*)'",
+        content, re.I | re.DOTALL
+    ):
+        objetos.append({
+            'tipo': 'chain_rule', 'nombre': m.group(2),
+            'detalle': f"Chain {m.group(1)} — condicion: {m.group(3)} — accion: {m.group(4)}",
+        })
+
+    for m in re.finditer(
+        r"DBMS_SCHEDULER\.CREATE_JOB\s*\(\s*job_name\s*=>\s*'([^']+)'(?:.*?job_action\s*=>\s*'([^']*)')?(?:.*?repeat_interval\s*=>\s*'([^']*)')?(?:.*?comments\s*=>\s*'([^']*)')?",
+        content, re.I | re.DOTALL
+    ):
+        partes = []
+        if m.group(2): partes.append(f'ejecuta {m.group(2)}')
+        if m.group(3): partes.append(f'frecuencia: {m.group(3)}')
+        if m.group(4): partes.append(m.group(4))
+        objetos.append({'tipo': 'job', 'nombre': m.group(1), 'detalle': ' — '.join(partes)})
+
+    return objetos
 
 
 # ── VISTAS BDD ────────────────────────────────────────────────────────────────
@@ -933,6 +1014,7 @@ def cargar_sql_ajax(request, detalle_id):
         schema      = None
         tables      = {}
         sequences   = []
+        pl_objects  = []
         sql_raw_partes = []
         duplicadas  = []
         for sql_file in sql_files:
@@ -948,6 +1030,7 @@ def cargar_sql_ajax(request, detalle_id):
             for seq in parsed['sequences']:
                 if seq not in sequences:
                     sequences.append(seq)
+            pl_objects.extend(parsed.get('pl_objects', []))
             sql_raw_partes.append(content)
         duplicadas = sorted(set(duplicadas))
         if duplicadas:
@@ -965,6 +1048,7 @@ def cargar_sql_ajax(request, detalle_id):
             'schema':     schema,
             'tables':     tables,
             'sequences':  sequences,
+            'pl_objects': pl_objects,
             'sql_raw':    '\n\n'.join(sql_raw_partes),
         })
     except Exception as e:
@@ -2135,6 +2219,8 @@ def _guardar_filas_preservando_fecha(generado, filas):
             'lineamiento': fila.get('lineamiento', ''),
             'mecanismo':   fila.get('mecanismo', ''),
             'observacion': fila.get('observacion', ''),
+            'fecha_texto': fila.get('fecha', ''),
+            'mantener_en_carga_sql': bool(fila.get('mantener', False)),
         }
         actual = existentes.get(i)
         if actual is None:
@@ -2267,6 +2353,12 @@ def finalizar_ajax(request, detalle_id):
                 'bloqueado': True,
                 'error': 'Esta versión ya está en proceso de formalización. Para realizar cambios, debe crear una nueva versión.',
             })
+        if not filas and generado.filas.exists():
+            return JsonResponse({
+                'ok': False,
+                'error': 'No se recibió ningún lineamiento para guardar. Para evitar dejar la versión en blanco '
+                         'por error, no se guardaron los cambios: recarga la página e intenta de nuevo.',
+            })
         if bdd_sql:       generado.bdd_sql       = bdd_sql
         if bdd_schema:    generado.bdd_schema    = bdd_schema
         if bdd_tables:    generado.bdd_tables    = bdd_tables
@@ -2274,6 +2366,12 @@ def finalizar_ajax(request, detalle_id):
         generado.save(update_fields=['bdd_sql','bdd_schema','bdd_tables','bdd_sequences'])
     elif modo == 'nueva_version':
         ultima   = detalle.generados.filter(es_borrador=False).order_by('-version').first()
+        if not filas and ultima and ultima.filas.exists():
+            return JsonResponse({
+                'ok': False,
+                'error': 'No se recibió ningún lineamiento para guardar. Para evitar crear una versión en blanco '
+                         'por error, no se creó la nueva versión: recarga la página e intenta de nuevo.',
+            })
         nueva_v  = (ultima.version + Decimal('1.0')) if ultima else Decimal('1.0')
         generado = LineamientoGenerado.objects.create(
             detalle=detalle, version=nueva_v, ticket=ticket, creado_por=request.user,
@@ -2298,6 +2396,8 @@ def finalizar_ajax(request, detalle_id):
                 generado=generado, orden=i,
                 necesidad=fila.get('necesidad', ''), lineamiento=fila.get('lineamiento', ''),
                 mecanismo=fila.get('mecanismo', ''),  observacion=fila.get('observacion', ''),
+                fecha_texto=fila.get('fecha', ''),
+                mantener_en_carga_sql=bool(fila.get('mantener', False)),
             )
     else:
         _guardar_filas_preservando_fecha(generado, filas)

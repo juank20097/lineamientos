@@ -88,6 +88,17 @@ class LineamientoDetalle(models.Model):
     def __str__(self):
         return f"{self.get_tipo_display()} - Ticket#{self.ticket_interno}"
 
+    def delete(self, *args, **kwargs):
+        """Al borrar un detalle (desde el admin o en cascada al borrar el
+        Lineamiento padre), limpia su entrada en el version_map de cualquier
+        Formalizacion que lo referencie, para no dejar una referencia zombi
+        (detalle_pk: generado_pk) apuntando a un detalle ya inexistente."""
+        pk_str = str(self.pk)
+        for formalizacion in self.lineamiento.formalizaciones.filter(version_map__has_key=pk_str):
+            del formalizacion.version_map[pk_str]
+            formalizacion.save(update_fields=['version_map'])
+        return super().delete(*args, **kwargs)
+
     @property
     def ultima_version(self):
         return self.generados.filter(es_borrador=False).order_by('-version').first()
@@ -184,6 +195,16 @@ class LineamientoGeneradoFila(models.Model):
     observacion = models.TextField(blank=True)
     fecha_creacion     = models.DateTimeField(auto_now_add=True)
     fecha_modificacion = models.DateTimeField(auto_now=True)
+    fecha_texto = models.CharField(
+        max_length=20, blank=True, default='', verbose_name='Fecha editada manualmente',
+        help_text='Si el usuario edita la fecha de la fila a mano (tal como aparece en la '
+                  'tabla), se guarda aqui tal cual y prevalece sobre fecha_creacion al mostrarla.',
+    )
+    mantener_en_carga_sql = models.BooleanField(
+        default=False, verbose_name='Mantener al cargar nuevo script SQL',
+        help_text='Solo aplica a lineamientos de BDD: si esta marcado, la fila no se elimina '
+                  'cuando se carga un nuevo script .sql en la pantalla de generacion.',
+    )
 
     class Meta:
         db_table = 'Filas_Lineamientos'

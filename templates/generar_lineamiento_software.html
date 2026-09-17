@@ -442,7 +442,7 @@
         <td contenteditable="true">${g?.necesidad??''}</td>
         <td contenteditable="true">${g?.lineamiento??''}</td>
         <td contenteditable="true">${g?.mecanismo??''}</td>
-        <td class="fecha">${g?.fecha??HOY}</td>
+        <td class="fecha" contenteditable="true">${g?.fecha??HOY}</td>
         <td contenteditable="true">${g?.observacion??''}</td>
         <td class="td-acc"><button class="btn-del"><i class="bi bi-trash3"></i></button></td>`;
       tr.querySelector('.btn-del').addEventListener('click',()=>{
@@ -474,7 +474,7 @@
     document.getElementById('btnGuardarBorrador').addEventListener('click', ()=>{
       const filas = [...docBody.querySelectorAll('tr')].map(tr=>{
         const c = tr.querySelectorAll('td');
-        return {necesidad:c[3].innerText, lineamiento:c[4].innerText, mecanismo:c[5].innerText, observacion:c[7].innerText};
+        return {necesidad:c[3].innerText, lineamiento:c[4].innerText, mecanismo:c[5].innerText, fecha:c[6].innerText, observacion:c[7].innerText};
       });
       const btn = document.getElementById('btnGuardarBorrador');
       btn.disabled = true;
@@ -496,7 +496,7 @@
     document.getElementById('btnFinalizar').addEventListener('click',()=>{
       const filas = [...docBody.querySelectorAll('tr')].map(tr=>{
         const c = tr.querySelectorAll('td');
-        return {necesidad:c[3].innerText, lineamiento:c[4].innerText, mecanismo:c[5].innerText, observacion:c[7].innerText};
+        return {necesidad:c[3].innerText, lineamiento:c[4].innerText, mecanismo:c[5].innerText, fecha:c[6].innerText, observacion:c[7].innerText};
       });
       if(!filas.length){alert('No hay lineamientos para guardar.');return;}
       abrirPreviewPdf({filas, modo:MODO, ticket:TICKET_NV});
