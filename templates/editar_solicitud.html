@@ -278,9 +278,12 @@
       btn.addEventListener('click', function(e){
         e.preventDefault();
         const url = this.href;
-        if(!confirm('\u00bfQuitar este tipo de lineamiento? Se cerrar\u00e1 el ticket en Znuny. Esta acci\u00f3n no se puede deshacer.')) return;
+        const motivo = prompt('\u00bfPor qu\u00e9 se est\u00e1 quitando este lineamiento? Este texto se registrar\u00e1 como el motivo del cierre del ticket en Znuny.');
+        if(motivo === null) return; // cancelado
+        if(!motivo.trim()){ alert('Debes indicar un motivo para poder quitar el lineamiento.'); return; }
+        if(!confirm('\u00bfQuitar este tipo de lineamiento? Se cerrar\u00e1 el ticket en Znuny con el motivo indicado. Esta acci\u00f3n no se puede deshacer.')) return;
         mostrarLoading('Cerrando ticket en Znuny...');
-        window.location.href = url;
+        window.location.href = url + '?motivo=' + encodeURIComponent(motivo.trim());
       });
     });
 

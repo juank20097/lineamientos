@@ -2630,7 +2630,8 @@ def eliminar_detalle_view(request, detalle_id):
     if detalle.finalizado:
         return redirect('editar_solicitud', lineamiento_id=detalle.lineamiento.pk)
     lin_id = detalle.lineamiento.pk
-    _run_script(ZNUNY_SCRIPT_CERRAR, [detalle.ticket_interno, MENSAJE_ELIMINACION])
+    motivo = request.GET.get('motivo', '').strip() or MENSAJE_ELIMINACION
+    _run_script(ZNUNY_SCRIPT_CERRAR, [detalle.ticket_interno, motivo])
     detalle.delete()
     return redirect('editar_solicitud', lineamiento_id=lin_id)
 
