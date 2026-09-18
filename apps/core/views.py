@@ -995,6 +995,7 @@ def generar_lineamiento_capacidad_view(request, detalle_id):
         'hay_borrador': borrador is not None,
         'diagrama_personalizado_url': detalle.diagrama_personalizado.url if detalle.diagrama_personalizado else '',
         'fila_inicial_transversal': json.dumps(_fila_inicial_transversal()),
+        'filas_indicadores_capacidad': json.dumps(_filas_indicadores_capacidad()),
     })
 
 
@@ -1115,6 +1116,32 @@ def _fila_inicial_transversal():
     if not g:
         return None
     return {'necesidad': g.necesidad, 'lineamiento': g.lineamiento, 'mecanismo': '', 'observacion': ''}
+
+
+INDICADORES_CAPACIDAD = [
+    ('CPU',            '>=70% durante 10 min', '>=85% durante 10 min',       'Analizar carga'),
+    ('RAM',            '>=70% durante 10 min', '>=85% durante 10 min',       'Analizar consumo'),
+    ('Swap',           '>=10%',                '>=20%',                     'Revisar memoria disponible'),
+    ('Disco /',        '>=70%',                '>=80%',                     'Revisar crecimiento'),
+    ('Latencia API',   '>=1 s',                '>=3 s',                     'Revisar backend/BD'),
+    ('Healthcheck',    'Fallo 1 vez',          'Fallo 3 veces consecutivas', 'Revisar servicio'),
+    ('Disponibilidad', '<99%',                 '<95%',                      'Revisar servicio'),
+]
+
+
+def _filas_indicadores_capacidad():
+    """Filas obligatorias de umbrales de monitoreo (CPU/RAM/Swap/Disco/etc.)
+    que se precargan siempre al crear un lineamiento de capacidad desde cero,
+    junto a la fila de Consideracion Tecnica transversal."""
+    return [
+        {
+            'necesidad': f'Indicador: {indicador}',
+            'lineamiento': f'Advertencia: {advertencia} — Crítico: {critico}',
+            'mecanismo': accion,
+            'observacion': '',
+        }
+        for indicador, advertencia, critico, accion in INDICADORES_CAPACIDAD
+    ]
 
 
 def _calcular_ids(info):
