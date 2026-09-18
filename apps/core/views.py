@@ -963,7 +963,7 @@ def generar_lineamiento_bdd_view(request, detalle_id):
     return render(request, 'generar_lineamiento_bdd.html', {
         'detalle': detalle, 'ultima': ultima, 'ya_generado': ultima is not None,
         'modo': modo, 'ticket_nv': ticket_nv,
-        'filas_precarga': filas_precarga,
+        'filas_precarga': json.dumps(filas_precarga),
         'bdd_precarga':   json.dumps(bdd_precarga),
         'hay_borrador': borrador is not None,
         'diagrama_personalizado_url': detalle.diagrama_personalizado.url if detalle.diagrama_personalizado else '',
@@ -991,7 +991,7 @@ def generar_lineamiento_capacidad_view(request, detalle_id):
     return render(request, 'generar_lineamiento_capacidad.html', {
         'detalle': detalle, 'ultima': ultima, 'ya_generado': ultima is not None,
         'modo': modo, 'ticket_nv': ticket_nv,
-        'filas_precarga': filas_precarga,
+        'filas_precarga': json.dumps(filas_precarga),
         'hay_borrador': borrador is not None,
         'diagrama_personalizado_url': detalle.diagrama_personalizado.url if detalle.diagrama_personalizado else '',
         'fila_inicial_transversal': json.dumps(_fila_inicial_transversal()),
@@ -2164,7 +2164,7 @@ def generar_lineamiento_view(request, detalle_id):
     return render(request, 'generar_lineamiento_software.html', {
         'detalle': detalle, 'paso_inicial': PASOS['inicio'],
         'ultima': ultima, 'ya_generado': ultima is not None,
-        'modo': modo, 'ticket_nv': ticket_nv, 'filas_precarga': filas_precarga,
+        'modo': modo, 'ticket_nv': ticket_nv, 'filas_precarga': json.dumps(filas_precarga),
         'hay_borrador': borrador is not None, 'mensajes_previos': mensajes_previos,
         'fila_inicial_transversal': json.dumps(_fila_inicial_transversal()),
     })
@@ -2401,6 +2401,8 @@ def finalizar_ajax(request, detalle_id):
             )
     else:
         _guardar_filas_preservando_fecha(generado, filas)
+    # TEMPORAL: ticket de prueba (9999999999999999) no debe llegar a Znuny.
+    es_prueba = detalle.lineamiento.ticket_principal.startswith('9999999999999')
     if modo in ('nuevo', 'nueva_version'):
         ticket_cierre = detalle.ticket_interno if modo == 'nuevo' else ticket
         version_map_pdf = {detalle.pk: generado.pk}
@@ -2418,9 +2420,12 @@ def finalizar_ajax(request, detalle_id):
             tmp_path = os.path.join(tmp_dir, nombre_pdf)
             with open(tmp_path, 'wb') as f:
                 f.write(buf.read())
-            resultado = _run_script(
-                ZNUNY_SCRIPT_CERRAR, [ticket_cierre, MENSAJE_FINALIZACION, tmp_path],
-            )
+            if es_prueba:
+                resultado = {'cerrado': True}
+            else:
+                resultado = _run_script(
+                    ZNUNY_SCRIPT_CERRAR, [ticket_cierre, MENSAJE_FINALIZACION, tmp_path],
+                )
             if not resultado.get('cerrado'):
                 return JsonResponse({
                     'ok': False,
@@ -2452,7 +2457,10 @@ def finalizar_ajax(request, detalle_id):
             tmp_path = os.path.join(tmp_dir, nombre_pdf)
             with open(tmp_path, 'wb') as f:
                 f.write(buf.read())
-            resultado = _run_script(ZNUNY_SCRIPT_NOTA, [ticket_version, tmp_path])
+            if es_prueba:
+                resultado = {'creado': True}
+            else:
+                resultado = _run_script(ZNUNY_SCRIPT_NOTA, [ticket_version, tmp_path])
             if not resultado.get('creado'):
                 return JsonResponse({
                     'ok': False,
