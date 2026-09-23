@@ -847,6 +847,44 @@ def _parse_sql(content):
         if tname in tables:
             cols = [c.strip().upper() for c in m.group(3).split(',')]
             tables[tname]['uniques'].append({'name': m.group(2), 'columns': cols})
+    # ALTER TABLE x ADD ( CONSTRAINT a PRIMARY KEY (...), CONSTRAINT b CHECK (...), ... )
+    # Variante donde varios constraints van agrupados dentro de un unico
+    # parentesis tras el ADD, en vez de "ADD CONSTRAINT ..." sueltos.
+    for m in re.finditer(r'ALTER\s+TABLE\s+(?:\w+\.)?(\w+)\s+ADD\s*\(', content, re.I):
+        tname = m.group(1).upper()
+        if tname not in tables:
+            continue
+        body, _fin = _extraer_bloque_parentesis(content, m.end() - 1)
+        for parte in _split_respetando_parentesis(body):
+            pk_m = re.match(r'CONSTRAINT\s+(\w+)\s+PRIMARY\s+KEY\s*\(([^)]+)\)', parte, re.I)
+            if pk_m:
+                pks = [p.strip().upper() for p in pk_m.group(2).split(',')]
+                tables[tname]['pks'] = pks
+                tables[tname]['pk_name'] = pk_m.group(1)
+                for col in tables[tname]['columns']:
+                    if col['name'] in pks: col['pk'] = True
+                continue
+            chk_m = re.match(r'CONSTRAINT\s+(\w+)\s+CHECK\s*\(', parte, re.I)
+            if chk_m:
+                expr, _fin2 = _extraer_bloque_parentesis(parte, chk_m.end() - 1)
+                tables[tname]['checks'].append({'name': chk_m.group(1), 'expr': expr.strip()})
+                continue
+            fk_m = re.match(
+                r'CONSTRAINT\s+(\w+)\s+FOREIGN\s+KEY\s*\(([^)]+)\)\s+REFERENCES\s+(?:\w+\.)?(\w+)\s*\(([^)]+)\)',
+                parte, re.I,
+            )
+            if fk_m:
+                tables[tname]['fks'].append({
+                    'name':        fk_m.group(1),
+                    'columns':     [c.strip().upper() for c in fk_m.group(2).split(',')],
+                    'ref_table':   fk_m.group(3).upper(),
+                    'ref_columns': [c.strip().upper() for c in fk_m.group(4).split(',')],
+                })
+                continue
+            uq_m = re.match(r'CONSTRAINT\s+(\w+)\s+UNIQUE\s*\(([^)]+)\)', parte, re.I)
+            if uq_m:
+                cols = [c.strip().upper() for c in uq_m.group(2).split(',')]
+                tables[tname]['uniques'].append({'name': uq_m.group(1), 'columns': cols})
     for m in re.finditer(
         r'CREATE\s+(UNIQUE\s+)?INDEX\s+(?:\w+\.)?(\w+)\s+ON\s+(?:\w+\.)?(\w+)\s*\(',
         content, re.I
@@ -2428,8 +2466,6 @@ def finalizar_ajax(request, detalle_id):
             )
     else:
         _guardar_filas_preservando_fecha(generado, filas)
-    # TEMPORAL: ticket de prueba (9999999999999999) no debe llegar a Znuny.
-    es_prueba = detalle.lineamiento.ticket_principal.startswith('9999999999999')
     if modo in ('nuevo', 'nueva_version'):
         ticket_cierre = detalle.ticket_interno if modo == 'nuevo' else ticket
         version_map_pdf = {detalle.pk: generado.pk}
@@ -2447,12 +2483,9 @@ def finalizar_ajax(request, detalle_id):
             tmp_path = os.path.join(tmp_dir, nombre_pdf)
             with open(tmp_path, 'wb') as f:
                 f.write(buf.read())
-            if es_prueba:
-                resultado = {'cerrado': True}
-            else:
-                resultado = _run_script(
-                    ZNUNY_SCRIPT_CERRAR, [ticket_cierre, MENSAJE_FINALIZACION, tmp_path],
-                )
+            resultado = _run_script(
+                ZNUNY_SCRIPT_CERRAR, [ticket_cierre, MENSAJE_FINALIZACION, tmp_path],
+            )
             if not resultado.get('cerrado'):
                 return JsonResponse({
                     'ok': False,
@@ -2484,10 +2517,7 @@ def finalizar_ajax(request, detalle_id):
             tmp_path = os.path.join(tmp_dir, nombre_pdf)
             with open(tmp_path, 'wb') as f:
                 f.write(buf.read())
-            if es_prueba:
-                resultado = {'creado': True}
-            else:
-                resultado = _run_script(ZNUNY_SCRIPT_NOTA, [ticket_version, tmp_path])
+            resultado = _run_script(ZNUNY_SCRIPT_NOTA, [ticket_version, tmp_path])
             if not resultado.get('creado'):
                 return JsonResponse({
                     'ok': False,
