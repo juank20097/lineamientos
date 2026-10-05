@@ -184,6 +184,25 @@
       const celdas = document.querySelectorAll('.td-tiempo-atencion');
       if (!celdas.length) return;
 
+      // Calcula los milisegundos transcurridos entre dos fechas excluyendo
+      // sábados y domingos completos (no se trabaja esos días).
+      function msHabiles(inicio, fin){
+        if (fin <= inicio) return 0;
+        let total = 0;
+        let cursor = new Date(inicio);
+        while (cursor < fin) {
+          const finDia = new Date(cursor);
+          finDia.setHours(24, 0, 0, 0);
+          const tramoFin = finDia < fin ? finDia : fin;
+          const dia = cursor.getDay(); // 0=domingo, 6=sábado
+          if (dia !== 0 && dia !== 6) {
+            total += tramoFin - cursor;
+          }
+          cursor = tramoFin;
+        }
+        return total;
+      }
+
       function formatear(ms){
         if (ms < 0) ms = 0;
         const minTotal = Math.floor(ms / 60000);
@@ -205,10 +224,10 @@
       }
 
       function actualizar(){
-        const ahora = Date.now();
+        const ahora = new Date();
         celdas.forEach(td => {
-          const inicio = new Date(td.dataset.timestamp).getTime();
-          const diff = ahora - inicio;
+          const inicio = new Date(td.dataset.timestamp);
+          const diff = msHabiles(inicio, ahora);
           td.textContent = formatear(diff);
           td.className = 'td-tiempo-atencion ' + claseColor(diff);
         });

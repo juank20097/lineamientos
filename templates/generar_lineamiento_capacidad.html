@@ -121,6 +121,9 @@
           <button class="btn-borrador" id="btnGuardarBorrador">
             <i class="bi bi-save2"></i> Guardar Borrador
           </button>
+          <button class="btn-borrador" id="btnExportarExcel">
+            <i class="bi bi-file-earmark-excel"></i> Exportar Excel
+          </button>
           <button class="btn-finalizar" id="btnFinalizar" disabled title="Complete al menos el diagrama o una fila de lineamiento">
             <i class="bi bi-check2-circle"></i>
             {% if modo == 'actualizar' %}Guardar Cambios{% elif modo == 'nueva_version' %}Guardar Nueva Versión{% else %}Finalizar{% endif %}
@@ -194,6 +197,7 @@
     const FINALIZAR_URL = '{% url "finalizar_lineamiento" detalle.pk %}';
     const PREVIEW_PDF_URL = '{% url "preview_pdf_lineamiento" detalle.pk %}';
     const GUARDAR_BORRADOR_URL = '{% url "guardar_borrador_lineamiento" detalle.pk %}';
+    const EXPORTAR_EXCEL_URL = '{% url "exportar_excel_lineamiento" detalle.pk %}';
     const DIAGRAMA_PERSONALIZADO_URL = '{{ diagrama_personalizado_url }}';
     const RESPONSABLE   = '{{ request.user.get_full_name|default:request.user.username }}';
     const HOY           = new Date().toLocaleDateString('es-EC',{day:'2-digit',month:'2-digit',year:'numeric'});
@@ -350,6 +354,36 @@
         else alert('Error al guardar borrador: '+(data.error||'desconocido'));
       })
       .catch(()=>{ btn.disabled=false; alert('Error de conexion al guardar borrador.'); });
+    });
+
+    // ── EXPORTAR EXCEL ──
+    document.getElementById('btnExportarExcel').addEventListener('click', ()=>{
+      const filas = [...docBody.querySelectorAll('tr')].map(tr=>{
+        const c = tr.querySelectorAll('td');
+        return {necesidad:c[3].innerText, lineamiento:c[4].innerText, mecanismo:c[5].innerText, fecha:c[6].innerText, observacion:c[7].innerText};
+      });
+      const btn = document.getElementById('btnExportarExcel');
+      btn.disabled = true;
+      mostrarLoading('Generando archivo Excel...');
+      fetch(EXPORTAR_EXCEL_URL,{
+        method:'POST',
+        headers:{'Content-Type':'application/json','X-CSRFToken':CSRF},
+        body: JSON.stringify({filas})
+      })
+      .then(r=>{
+        if(!r.ok) throw new Error('excel');
+        const nombre = (r.headers.get('Content-Disposition')||'').match(/filename="(.+)"/);
+        return r.blob().then(blob=>({blob, nombre: nombre ? nombre[1] : 'lineamiento.xlsx'}));
+      })
+      .then(({blob, nombre})=>{
+        ocultarLoading(); btn.disabled = false;
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url; a.download = nombre;
+        document.body.appendChild(a); a.click(); a.remove();
+        URL.revokeObjectURL(url);
+      })
+      .catch(()=>{ ocultarLoading(); btn.disabled=false; alert('Error al generar el Excel.'); });
     });
 
     // ── FINALIZAR ──

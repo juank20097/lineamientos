@@ -2356,6 +2356,66 @@ def preview_pdf_lineamiento_ajax(request, detalle_id):
     return HttpResponse(buf.read(), content_type='application/pdf')
 
 
+# ── AJAX: EXPORTAR EXCEL (respaldo del borrador) ──────────────────────────────
+
+@login_required
+@require_POST
+def exportar_excel_lineamiento_ajax(request, detalle_id):
+    """Guarda el borrador actual (igual que 'Guardar borrador') y devuelve un
+    .xlsx de respaldo con las filas de la tabla de lineamiento tal como estan
+    en pantalla en ese momento."""
+    from openpyxl import Workbook
+    from openpyxl.styles import Font, Alignment, PatternFill
+    from openpyxl.utils import get_column_letter
+
+    detalle  = get_object_or_404(LineamientoDetalle, pk=detalle_id, usuario_asignado=request.user)
+    data     = json.loads(request.body)
+    generado = _guardar_borrador(detalle, data, request)
+
+    wb = Workbook()
+    ws = wb.active
+    ws.title = 'Lineamientos'
+
+    encabezados = ['#', 'Necesidad Técnica', 'Lineamiento', 'Mecanismo de Implementación', 'Fecha', 'Observaciones']
+    ws.append(encabezados)
+    fill_hdr  = PatternFill('solid', fgColor='2563EB')
+    font_hdr  = Font(bold=True, color='FFFFFF')
+    for col in range(1, len(encabezados) + 1):
+        celda = ws.cell(row=1, column=col)
+        celda.font = font_hdr
+        celda.fill = fill_hdr
+        celda.alignment = Alignment(horizontal='center', vertical='center', wrap_text=True)
+
+    for i, fila in enumerate(generado.filas.all().order_by('orden'), start=1):
+        ws.append([
+            i, fila.necesidad, fila.lineamiento, fila.mecanismo,
+            fila.fecha_texto or timezone.localtime(fila.fecha_creacion).strftime('%d/%m/%Y'),
+            fila.observacion,
+        ])
+
+    anchos = [5, 35, 45, 35, 12, 30]
+    for col, ancho in enumerate(anchos, start=1):
+        ws.column_dimensions[get_column_letter(col)].width = ancho
+    for row in ws.iter_rows(min_row=2):
+        for celda in row:
+            celda.alignment = Alignment(vertical='top', wrap_text=True)
+
+    buf = BytesIO()
+    wb.save(buf)
+    buf.seek(0)
+
+    nombre = _nombre_pdf(
+        detalle.lineamiento.id_numerico, detalle.lineamiento.ticket_principal,
+        tipos=[detalle.tipo], temporal=True,
+    ).rsplit('.', 1)[0] + '.xlsx'
+    resp = HttpResponse(
+        buf.read(),
+        content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    )
+    resp['Content-Disposition'] = f'attachment; filename="{nombre}"'
+    return resp
+
+
 # ── AJAX: FINALIZAR ───────────────────────────────────────────────────────────
 
 def _autoformalizar_si_completo(lin, usuario):
