@@ -150,7 +150,7 @@
             {% if modo != 'asignadas' %}
             <td>
               <div class="d-flex align-items-center gap-2">
-                <a href="{{ grupo.formalizacion_final.documento.url }}" target="_blank" class="btn btn-sm fw-semibold text-white"
+                <a href="{% url 'descargar_formalizacion_sin_firmas' grupo.formalizacion_final.pk %}" target="_blank" class="btn btn-sm fw-semibold text-white"
                   style="background:#dc2626;border:none;border-radius:7px;padding:4px 12px;font-size:.78rem;width:fit-content;">
                   <i class="bi bi-file-earmark-pdf-fill me-1"></i>Descargar PDF
                 </a>

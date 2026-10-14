@@ -36,6 +36,7 @@ urlpatterns = [
     path('lineamiento/exportar-excel/<int:detalle_id>/', views.exportar_excel_lineamiento_ajax, name='exportar_excel_lineamiento'),
     path('lineamiento/version/<int:detalle_id>/',        views.cargar_version_ajax,          name='cargar_version'),
     path('lineamiento/descargar/<int:lineamiento_id>/',  views.descargar_pdf_solicitud,      name='descargar_solicitud'),
+    path('formalizacion/descargar-sin-firmas/<int:formalizacion_id>/', views.descargar_pdf_formalizacion_sin_firmas, name='descargar_formalizacion_sin_firmas'),
     path('lineamiento/formalizar/<int:lineamiento_id>/', views.formalizar_ajax,              name='formalizar_lineamiento'),
     path('lineamiento/estado-formalizacion/<int:lineamiento_id>/', views.estado_formalizacion_ajax, name='estado_formalizacion'),
     path('lineamiento/editar/<int:lineamiento_id>/',     views.editar_solicitud_view,        name='editar_solicitud'),

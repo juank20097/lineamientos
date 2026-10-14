@@ -234,7 +234,7 @@ def _generar_pdf_lineamientos(lin, version_map, watermark=False, tipos_incluir=N
             Paragraph('Dirección Nacional de Tecnologías de la Información', estilo('dnti', fontSize=8, alignment=TA_CENTER, textColor=GRIS)),
             Paragraph('Subdirección Nacional de Arquitectura y Soluciones', estilo('sdnas', fontSize=8, alignment=TA_CENTER, textColor=GRIS)),
             Spacer(1, 3*mm),
-            Paragraph(f'<b>LINEAMIENTOS TÉCNICOS</b> &nbsp;&nbsp;|&nbsp;&nbsp; Fecha: <b>{hoy}</b> &nbsp;&nbsp;|&nbsp;&nbsp; Código Documento: <b>{codigo_doc}</b>', S_TITLE),
+            Paragraph(f'<b>LINEAMIENTOS TÉCNICOS</b> &nbsp;&nbsp;|&nbsp;&nbsp; Código Documento: <b>{codigo_doc}</b>', S_TITLE),
             Spacer(1, 2*mm),
         ]
         if include_tickets and ticket_info_rows:
@@ -627,7 +627,7 @@ def _generar_pdf_lineamientos(lin, version_map, watermark=False, tipos_incluir=N
         canvas.setFont('Helvetica', 6)
         canvas.setFillColor(colors.HexColor('#94a3b8'))
         canvas.drawRightString(PAGE_W - MARGIN, 0.5*cm, f'Pág. {doc.page}')
-        canvas.drawString(MARGIN, 0.5*cm, f'{codigo_doc} | {hoy} | IESS - DNTI - SDNAS')
+        canvas.drawString(MARGIN, 0.5*cm, f'{codigo_doc} | IESS - DNTI - SDNAS')
         canvas.restoreState()
         if watermark:
             canvas.saveState()
@@ -2634,6 +2634,26 @@ def descargar_pdf_solicitud(request, lineamiento_id):
         return resp
     except Exception as e:
         return HttpResponse(f'Error al generar PDF: {e}', status=500)
+
+
+@login_required
+def descargar_pdf_formalizacion_sin_firmas(request, formalizacion_id):
+    """Genera al vuelo el PDF de lineamientos SIN firmas digitales, usando el
+    mismo version_map con el que se creo esta Formalizacion. Reemplaza la
+    descarga directa de 'formalizacion.documento' (el PDF firmado guardado),
+    que sigue existiendo en el storage como respaldo pero ya no se ofrece
+    para descarga desde los botones de la UI."""
+    formalizacion = get_object_or_404(Formalizacion, pk=formalizacion_id)
+    lin = formalizacion.lineamiento
+    version_map = {int(k): v for k, v in formalizacion.version_map.items()}
+    try:
+        buf = _generar_pdf_lineamientos(lin, version_map, watermark=False)
+    except Exception as e:
+        return HttpResponse(f'Error al generar PDF: {e}', status=500)
+    resp = HttpResponse(buf.read(), content_type='application/pdf')
+    nombre_pdf = _nombre_pdf(lin.id_numerico, lin.ticket_principal, temporal=False)
+    resp['Content-Disposition'] = f'attachment; filename="{nombre_pdf}"'
+    return resp
 
 
 # ── FORMALIZAR (staff) ────────────────────────────────────────────

@@ -85,9 +85,9 @@
   <div class="info-bar">
     <a href="{% url 'home' %}" style="color:#64748b;text-decoration:none;font-size:.8rem;"><i class="bi bi-arrow-left me-1"></i>Inicio</a>
     <span class="chip" {% if detalle.lineamiento.asunto %}title="{{ detalle.lineamiento.asunto }}"{% endif %}><i class="bi bi-ticket-detailed me-1"></i>#{{ detalle.lineamiento.ticket_principal }}</span>
-    <span class="chip"><i class="bi bi-ticket me-1"></i>#{{ detalle.ticket_interno }}</span>
+    <span class="chip"><i class="bi bi-ticket me-1"></i>#{{ ticket_nv|default:detalle.ticket_interno }}</span>
     <span class="chip"><i class="bi bi-hdd-network me-1"></i>Capacidad</span>
-    {% if modo != 'nuevo' %}<span class="chip" style="background:#fef9ec;color:#92400e;">{% if modo == 'actualizar' %}Actualizando{% else %}Nueva versión{% endif %}{% if ticket_nv %} · #{{ ticket_nv }}{% endif %}</span>{% endif %}
+    {% if modo != 'nuevo' %}<span class="chip" style="background:#fef9ec;color:#92400e;">{% if modo == 'actualizar' %}Actualizando{% else %}Nueva versión{% endif %}</span>{% endif %}
   </div>
 
   <div class="workspace">

@@ -127,7 +127,7 @@
             </td>
             <td>
               {% if firma.formalizacion.formalizado %}
-              <a href="{{ firma.formalizacion.documento.url }}" target="_blank" class="btn btn-sm fw-semibold text-white"
+              <a href="{% url 'descargar_formalizacion_sin_firmas' firma.formalizacion.pk %}" target="_blank" class="btn btn-sm fw-semibold text-white"
                 style="background:#dc2626;border:none;border-radius:7px;padding:5px 14px;font-size:.82rem;">
                 <i class="bi bi-file-earmark-pdf-fill me-1"></i>PDF
               </a>
